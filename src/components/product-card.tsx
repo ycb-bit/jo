@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import type { Product } from "@/lib/types";
-import { ProductArt } from "./product-art";
+import { ProductImage, imageAt, cardImageSizes } from "./product-image";
 import { useWishlist } from "@/lib/store";
 import { formatMoney, totalStock } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,12 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
   const [hover, setHover] = useState(false);
   const stock = totalStock(product.stock || {});
   const saved = wishlist.productIds.includes(product.id);
+
+  // Front image is the cover; the second is the hover shot when it exists.
+  const front = imageAt(product.images, 0);
+  const back = product.images && product.images.length > 1 ? product.images[1] : undefined;
+  const hasPhotos = (product.images?.length || 0) > 0;
+  const showBack = Boolean(back) && (hover || !hasPhotos);
 
   return (
     <motion.article
@@ -27,21 +33,41 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
     >
       <Link href={`/product/${product.slug}`} className="block">
         <div className="relative aspect-[4/5] overflow-hidden bg-bone-dim">
-          <ProductArt
-            seed={product.slug}
+          {/* Cover / default state */}
+          <div
             className={cn(
-              "absolute inset-0 transition-opacity duration-700",
-              hover && product.images?.length === 0 ? "opacity-0" : "opacity-100"
+              "absolute inset-0 transition-opacity duration-500",
+              showBack ? "opacity-0" : "opacity-100"
             )}
-          />
-          <ProductArt
-            seed={product.slug}
-            variant={1}
+          >
+            <ProductImage
+              src={front}
+              seed={product.slug}
+              alt={product.name}
+              className="h-full w-full object-cover"
+              sizes={cardImageSizes}
+              priority={index < 4}
+            />
+          </div>
+
+          {/* Hover state: second photo if there is one, otherwise swatch variant */}
+          <div
             className={cn(
-              "absolute inset-0 transition-opacity duration-700",
-              hover ? "opacity-100" : "opacity-0"
+              "absolute inset-0 transition-opacity duration-500",
+              showBack ? "opacity-100" : "opacity-0"
             )}
-          />
+            aria-hidden={!showBack}
+          >
+            <ProductImage
+              src={back}
+              seed={product.slug}
+              variant={1}
+              alt=""
+              className="h-full w-full object-cover"
+              sizes={cardImageSizes}
+            />
+          </div>
+
           {stock === 0 && (
             <span className="absolute left-3 top-3 bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-bone">
               Sold out
@@ -58,7 +84,7 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
               e.preventDefault();
               wishlist.toggle(product.id);
             }}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center border border-ink/15 bg-bone/80 opacity-0 backdrop-blur transition-all duration-300 hover:bg-bone group-hover:opacity-100"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center border border-ink/15 bg-bone/80 opacity-0 backdrop-blur transition-all duration-300 hover:bg-bone focus-visible:opacity-100 group-hover:opacity-100"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill={saved ? "#C8501E" : "none"} stroke={saved ? "#C8501E" : "#141311"} strokeWidth="2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />

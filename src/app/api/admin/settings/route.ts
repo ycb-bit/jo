@@ -6,7 +6,7 @@ import { getFirestore } from "firebase-admin/firestore";
 export const runtime = "nodejs";
 
 const DEFAULTS = {
-  currency: "USD",
+  currency: "ETB",
   handlingFee: 0,
   paymentMethods: [],
   categories: ["outerwear", "knitwear", "tops", "bottoms", "accessories"],

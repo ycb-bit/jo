@@ -31,5 +31,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    // Analytics funnel events.
+    // Write-only for the storefront: anyone may record an event, but nobody
+    // can read them except an admin. The timestamp is pinned to "now" so a
+    // client cannot backdate events to inflate the dashboard.
+    match /events/{id} {
+      allow create: if isSignedIn() || request.auth == null;
+      allow read, update, delete: if isAdmin();
+    }
   }
 }

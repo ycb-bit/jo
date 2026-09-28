@@ -1,4 +1,6 @@
-import { CURRENCY } from "./theme";
+import { CURRENCY, FREE_SHIPPING_THRESHOLD } from "./theme";
+
+export { FREE_SHIPPING_THRESHOLD };
 
 export function cn(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");

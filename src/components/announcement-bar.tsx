@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
+import { formatMoney, FREE_SHIPPING_THRESHOLD } from "@/lib/utils";
 
-const FALLBACK = "Free worldwide shipping over $150 — Hand-finished in small batches";
+const FALLBACK = `Free worldwide shipping over ${formatMoney(FREE_SHIPPING_THRESHOLD)} — Hand-finished in small batches`;
 
 export function AnnouncementBar() {
   const [text, setText] = useState(FALLBACK);

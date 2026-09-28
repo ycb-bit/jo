@@ -10,6 +10,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { formatMoney } from "@/lib/utils";
 import { compressImageToDataUri } from "@/lib/image-compress";
+import { track } from "@/lib/analytics";
 import type { Address, PaymentMethod, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductArt } from "@/components/product-art";
@@ -101,6 +102,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not create order");
+      track("begin_checkout", { ref: data.orderId, value: data.total });
       setOrder({ id: data.orderId, ref: data.ref, total: data.total });
       setStep(2);
       window.scrollTo({ top: 0 });
@@ -147,11 +149,16 @@ export default function CheckoutPage() {
       const res = await fetch("/api/orders/receipt/submit", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId: order.id, receiptRef: receiptRef.trim() }),
+        body: JSON.stringify({
+          orderId: order.id,
+          receiptRef: receiptRef.trim(),
+          paymentMethodId: method?.id || "",
+        }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Submit failed");
       cart.clear();
+      track("receipt_submitted", { ref: order.id, name: receiptRef.trim() });
       toast("Receipt submitted — Jo will verify it shortly");
       router.push(`/order/${order.id}`);
     } catch (err) {
@@ -315,13 +322,52 @@ export default function CheckoutPage() {
                 Type the transfer reference from your banking app so Jo can match your payment
                 to <strong>{order.ref}</strong> in the account.
               </p>
-              <div className="mt-8 max-w-md">
+
+              {/* Which bank they paid from — repeated here so the reference is
+                  never submitted without the account it belongs to. */}
+              <div className="mt-6 max-w-md border border-line p-5 text-[13px]">
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">You paid via</p>
+                {method ? (
+                  <div className="mt-2 space-y-1.5">
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Method</span>
+                      <span className="text-right font-medium">{method.name}</span>
+                    </p>
+                    {method.type === "bank" && method.accountNumber && (
+                      <p className="flex justify-between gap-4">
+                        <span className="opacity-60">Account</span>
+                        <span className="tabular-nums select-all">{method.accountNumber}</span>
+                      </p>
+                    )}
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Order</span>
+                      <span className="tabular-nums">{order.ref}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 leading-relaxed opacity-70">
+                    No method was recorded — type the reference anyway and Jo will confirm.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 max-w-md">
+                <label className="text-[11px] uppercase tracking-[0.2em] opacity-60">
+                  {method?.type === "bank" ? `${method.name} transfer reference` : "Payment reference"}
+                </label>
                 <input
-                  className="input"
-                  placeholder="e.g. TRF-884102-JO"
+                  className="input mt-2"
+                  placeholder="e.g. FT240812ABCD"
                   value={receiptRef}
                   onChange={(e) => setReceiptRef(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
                 />
+                <p className="mt-2 text-[12px] leading-relaxed opacity-55">
+                  {method?.type === "bank"
+                    ? "This is the code your bank or telebirr app generated. Jo looks for exactly this in the account statement."
+                    : "Copy this from your payment confirmation so Jo can match it to your order."}
+                </p>
                 <button
                   onClick={submitForVerification}
                   disabled={uploading || receiptRef.trim().length < 3}
@@ -331,7 +377,8 @@ export default function CheckoutPage() {
                 </button>
                 <p className="mt-4 text-[12px] leading-relaxed opacity-55">
                   Verification is done by Jo himself — usually within a few hours. You can watch
-                  the status live from your account.
+                  the status live from your account. If it&apos;s rejected you&apos;ll be able to
+                  submit a new receipt from this page.
                 </p>
               </div>
             </motion.div>

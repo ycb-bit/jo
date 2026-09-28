@@ -7,7 +7,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import type { PaymentMethod, StoreSettings } from "@/lib/types";
 
 const DEFAULTS: StoreSettings = {
-  currency: "USD",
+  currency: "ETB",
   handlingFee: 0,
   paymentMethods: [],
   categories: ["outerwear", "knitwear", "tops", "bottoms", "accessories"],
@@ -243,7 +243,7 @@ export default function AdminSettings() {
       <div className="mt-10 space-y-5 text-[13px]">
         <h2 className="font-display text-xl uppercase">General</h2>
         <label className="block">
-          <span className="opacity-60">Currency code (USD, EUR, GBP, ETB…)</span>
+          <span className="opacity-60">Currency code (ETB by default — must be a valid ISO-4217 code)</span>
           <input
             className="mt-1 w-full border-b border-bone/25 bg-transparent py-2.5 outline-none focus:border-bone"
             value={settings.currency}

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const db = getFirestore(admin);
   const settingsSnap = await db.collection("settings").doc("store").get();
   const settings = settingsSnap.data() || {};
-  const currency = settings.currency || "USD";
+  const currency = settings.currency || "ETB";
 
   const subtotal = body.items.reduce(
     (a: number, i: { unitPrice: number; qty: number }) => a + i.unitPrice * i.qty,

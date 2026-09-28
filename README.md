@@ -21,16 +21,34 @@ Handy scripts:
 ```bash
 npm run seed          # (re)seed the 14-product catalog + settings into the real project
 npm run deploy:rules  # deploy firestore.rules + storage.rules after edits
-npm run admin:user    # create/grant Jo's admin account (cherinetyeamlak2@gmail.com)
+npm run admin:user    # create/grant an admin account (reads ADMIN_EMAIL / ADMIN_PASSWORD)
 npm run emulators     # optional: fully local mode (set NEXT_PUBLIC_USE_EMULATORS=1)
 ```
 
-1. Once Auth is enabled in the console, sign in as **cherinetyeamlak2@gmail.com / JoStudio!2026**
-   (or any account granted admin via `npm run admin:user -- you@example.com`).
-2. Open `/admin` → **Store settings** → paste Jo's real SiteZero payment link & bank details.
-3. **Admin → Lookbook** → upload frames to “add to the album” — they appear on the home
+Admin credentials are **never committed**. They come from the environment
+(`ADMIN_EMAIL`, `ADMIN_PASSWORD`), and Firebase service-account access comes from
+`FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` / `FIREBASE_PROJECT_ID` — set
+them in your dashboard's Environment panel.
+
+1. Enable Authentication → Email/Password in the Firebase console.
+2. Create the first admin:
+   ```bash
+   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='<strong-password>' npm run admin:user
+   ```
+3. Open `/admin` → **Store settings** → paste the real payment link & bank details.
+4. **Admin → Lookbook** → upload frames to "add to the album" — they appear on the home
    page and `/lookbook` instantly.
-4. Shop, check out, upload a receipt, then verify it in **Admin → Orders & verification**.
+5. Shop, check out, upload a receipt, then verify it in **Admin → Orders & verification**.
+
+## Environment variables
+
+| Key | Used by | Notes |
+|---|---|---|
+| `FIREBASE_PROJECT_ID` | admin SDK | e.g. `jo-studio-2026` |
+| `FIREBASE_CLIENT_EMAIL` | admin SDK | from the service-account JSON |
+| `FIREBASE_PRIVATE_KEY` | admin SDK | keep literal `\n` sequences |
+| `NEXT_PUBLIC_SITE_URL` | SEO | canonical origin, e.g. `https://yourdomain.com` |
+| `NEXT_PUBLIC_FIREBASE_*` | browser SDK | public Firebase web config |
 
 ## The SiteZero payment flow
 

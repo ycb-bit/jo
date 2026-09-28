@@ -26,9 +26,12 @@ type Seed = {
   stock: Record<string, number>;
 };
 
+/** Source catalogue prices are authored in USD; see USD_TO_ETB below. */
+type SeedSource = Omit<Seed, "price"> & { price: number };
+
 const S = ["XS", "S", "M", "L", "XL", "XXL"];
 
-const products: Seed[] = [
+const products: SeedSource[] = [
   {
     slug: "boxcar-overshirt", name: "Boxcar Overshirt",
     description: "A workwear box-cut overshirt in brushed 12oz canvas. Wears like a jacket, folds like a shirt. Two chest pockets, corozo buttons, double-stitched shoulders.",
@@ -129,6 +132,15 @@ const products: Seed[] = [
   },
 ];
 
+/**
+ * The catalogue below is written in USD (the original design figures).
+ * The store trades in ETB, so convert on the way in — same rate the
+ * one-off migrate-etb-xxl.ts used, rounded to the nearest 50 birr.
+ * Editing the source numbers stays readable; the DB always gets ETB.
+ */
+const USD_TO_ETB = 162;
+const toEtb = (usd: number) => Math.round((usd * USD_TO_ETB) / 50) * 50;
+
 async function main() {
   console.log(`Seeding ${EMULATOR ? "EMULATORS" : "REAL project jo-studio-2026"}…`);
   const batch = db.batch();
@@ -136,8 +148,14 @@ async function main() {
 
   products.forEach((p, i) => {
     const ref = db.collection("products").doc(p.slug);
+    const { price, ...rest } = p;
+    const converted: Seed = {
+      ...rest,
+      price: toEtb(price),
+    };
     batch.set(ref, {
-      ...p,
+      ...converted,
+      currency: "ETB",
       images: [],
       published: true,
       createdAt: now - i * 86_400_000,
@@ -153,7 +171,7 @@ async function main() {
   });
 
   await batch.commit();
-  console.log(`✓ Seeded ${products.length} products + store settings`);
+  console.log(`✓ Seeded ${products.length} products in ETB + store settings`);
   await app.delete();
 }
 
