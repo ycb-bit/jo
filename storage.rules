@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /lookbook/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /receipts/{orderId}/{allPaths=**} {
+      allow read: if isAdmin()
+        || (request.auth != null && request.auth.token != null
+            && resource.metadata.customMetadata.owner == request.auth.uid);
+      allow write: if request.auth != null
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.metadata.customMetadata.owner == request.auth.uid;
+    }
+  }
+}

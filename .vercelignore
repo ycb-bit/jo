@@ -1,0 +1,15 @@
+# Never ship secrets or local junk to Vercel
+jo-service-account.json
+.gcp-token
+.policy.json
+.sa-name
+.auth-config.json
+.dbop.json
+.init.json
+.rules-body.json
+*.log
+.npm-logs/
+.firebase-data/
+emulators.log
+dev.log
+README.md

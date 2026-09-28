@@ -1,0 +1,30 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.firebase-data/
+.env*.local
+*.log
+.npm-logs/
+
+# GCP / Firebase secrets (generated, never commit)
+jo-service-account.json
+.gcp-token
+.policy.json
+.sa-name
+.auth-config.json
+.dbop.json
+.init.json
+.rules-body.json
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+storage_debug.log
+
+.vercel
+.env*
+
+# Freebuff workspace metadata
+.freebuff/

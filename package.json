@@ -1,0 +1,40 @@
+{
+  "name": "jo-studio",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
+    "emulators": "firebase emulators:start --import=.firebase-data --export-on-exit=.firebase-data",
+    "set-admin": "tsx scripts/set-admin.ts",
+    "deploy:rules": "node scripts/deploy-rules.js",
+    "admin:user": "tsx scripts/create-admin-user.ts"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.0.6",
+    "@react-three/fiber": "^9.1.2",
+    "clsx": "^2.1.1",
+    "firebase": "^11.8.0",
+    "firebase-admin": "^13.3.0",
+    "framer-motion": "^12.15.0",
+    "lenis": "^1.2.3",
+    "next": "^15.3.4",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "three": "^0.174.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.7",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.6",
+    "@types/three": "^0.174.0",
+    "tailwindcss": "^4.1.7",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "firebase-tools": "^14.4.0"
+  }
+}
