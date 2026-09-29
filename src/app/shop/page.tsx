@@ -25,6 +25,7 @@ function ShopInner() {
   const [sort, setSort] = useState<string>("new");
   const [maxPrice, setMaxPrice] = useState(0);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     // Admin-managed categories (Admin → Settings → Categories)
@@ -40,10 +41,15 @@ function ShopInner() {
   }, []);
 
   useEffect(() => {
-    return watchProducts(setProducts, {
-      category: category === "all" ? undefined : category,
-      sort,
-    });
+    setLoadError(null);
+    return watchProducts(
+      setProducts,
+      {
+        category: category === "all" ? undefined : category,
+        sort,
+      },
+      () => setLoadError("The rack could not be loaded. Please refresh in a moment.")
+    );
   }, [category, sort]);
 
   const priceCeil = useMemo(() => {
@@ -118,7 +124,18 @@ function ShopInner() {
         {products ? `${visible.length} piece${visible.length === 1 ? "" : "s"}` : "Loading"}
       </p>
 
-      {products === null ? (
+      {loadError ? (
+        <div className="mt-20 border border-ember/40 p-16 text-center">
+          <p className="font-display text-3xl uppercase">Rack unavailable</p>
+          <p className="mt-3 opacity-60">{loadError}</p>
+          <button
+            onClick={() => router.refresh()}
+            className="mt-6 border border-ink px-6 py-2.5 text-[11px] uppercase tracking-[0.16em] transition-colors hover:bg-ink hover:text-bone"
+          >
+            Try again
+          </button>
+        </div>
+      ) : products === null ? (
         <div className="mt-6 grid grid-cols-2 gap-5 md:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="skeleton aspect-[4/5]" />
