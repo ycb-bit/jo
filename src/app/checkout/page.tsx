@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { useCart, useToast } from "@/lib/store";
 import { db } from "@/lib/firebase";
@@ -14,6 +13,7 @@ import { track } from "@/lib/analytics";
 import type { Address, PaymentMethod, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductArt } from "@/components/product-art";
+import { FadeIn as StepPanel } from "@/components/fade-in";
 
 const EMPTY: Address = {
   fullName: "", line1: "", line2: "", city: "", subCity: "", region: "", postalCode: "", country: "Ethiopia", phone: "",
@@ -201,7 +201,7 @@ export default function CheckoutPage() {
         <div>
           {/* STEP 1 — Address */}
           {step === 1 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Where it&apos;s going</h1>
               <form
                 className="mt-8 grid gap-5 sm:grid-cols-2"
@@ -220,12 +220,12 @@ export default function CheckoutPage() {
                   Continue to payment →
                 </button>
               </form>
-            </motion.div>
+            </StepPanel>
           )}
 
           {/* STEP 2 — Payment instructions */}
           {step === 2 && order && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <StepPanel>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Pay it</h1>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
                 Order <strong>{order.ref}</strong> is reserved. Pick how you&apos;re paying, send
@@ -311,12 +311,12 @@ export default function CheckoutPage() {
                   </button>
                 )}
               </div>
-            </motion.div>
+            </StepPanel>
           )}
 
           {/* STEP 3 — Reference + submit */}
           {step === 3 && order && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <StepPanel>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Last thing</h1>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
                 Type the transfer reference from your banking app so Jo can match your payment
@@ -381,7 +381,7 @@ export default function CheckoutPage() {
                   submit a new receipt from this page.
                 </p>
               </div>
-            </motion.div>
+            </StepPanel>
           )}
         </div>
 

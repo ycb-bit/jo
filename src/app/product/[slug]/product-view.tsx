@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { watchProduct, watchProducts } from "@/lib/catalog";
 import { ProductImage, imageAt } from "@/components/product-image";
+import { FadeIn } from "@/components/fade-in";
 import { ProductCard } from "@/components/product-card";
 import { Reveal } from "@/components/reveal";
 import { Magnetic } from "@/components/magnetic";
@@ -169,7 +170,7 @@ export default function ProductView({ slug }: { slug: string }) {
 
         {/* Buy panel */}
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+          <FadeIn animate={false} y={24} duration={0.7}>
             <h1 className="font-display text-4xl uppercase leading-[0.95] md:text-5xl">{product.name}</h1>
             <p className="mt-4 text-xl tabular-nums">{formatMoney(variantPrice(product, color, size), product.currency)}</p>
 
@@ -278,7 +279,7 @@ export default function ProductView({ slug }: { slug: string }) {
                 </details>
               ))}
             </div>
-          </motion.div>
+          </FadeIn>
         </div>
       </div>
 

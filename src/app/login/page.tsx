@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/store";
 import { authErrorMessage } from "@/lib/auth-messages";
 import { ProductArt } from "@/components/product-art";
+import { FadeIn } from "@/components/fade-in";
 
 export default function LoginPage() {
   const { signIn, signInGoogle, reset } = useAuth();
@@ -36,7 +37,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto grid min-h-[80svh] max-w-[1440px] items-center gap-16 px-5 py-16 md:grid-cols-2 md:px-10">
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} className="mx-auto w-full max-w-md">
+      <FadeIn animate={false} className="mx-auto w-full max-w-md">
         <h1 className="font-display text-5xl uppercase">
           Welcome back<span className="text-ember">.</span>
         </h1>
@@ -80,7 +81,7 @@ export default function LoginPage() {
         >
           Continue with Google
         </button>
-      </motion.div>
+      </FadeIn>
 
       <div className="relative hidden h-[560px] overflow-hidden md:block">
         <ProductArt seed="auth-panel" className="h-full w-full" />
