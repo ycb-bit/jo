@@ -11,6 +11,7 @@
     "emulators": "firebase emulators:start --import=.firebase-data --export-on-exit=.firebase-data",
     "set-admin": "tsx scripts/set-admin.ts",
     "deploy:rules": "node scripts/deploy-rules.js",
+    "deploy:rules:sa": "tsx scripts/deploy-rules-sa.ts",
     "admin:user": "tsx scripts/create-admin-user.ts"
   },
   "dependencies": {
