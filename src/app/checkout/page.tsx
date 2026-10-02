@@ -6,18 +6,19 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useCart, useToast } from "@/lib/store";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { formatMoney } from "@/lib/utils";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { track } from "@/lib/analytics";
 import type { Address, PaymentMethod, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductArt } from "@/components/product-art";
+import { AddressCard } from "@/components/address-card";
+import { AddressFields } from "@/components/address-fields";
+import {
+  EMPTY_ADDRESS, missingAddressFields, normalizeAddresses, withAddress,
+} from "@/lib/addresses";
 import { FadeIn as StepPanel } from "@/components/fade-in";
-
-const EMPTY: Address = {
-  fullName: "", line1: "", line2: "", city: "", subCity: "", region: "", postalCode: "", country: "Ethiopia", phone: "",
-};
 
 const FALLBACK_SETTINGS: StoreSettings = {
   currency: "ETB",
@@ -35,7 +36,11 @@ export default function CheckoutPage() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [settings, setSettings] = useState<StoreSettings>(FALLBACK_SETTINGS);
-  const [address, setAddress] = useState<Address>(EMPTY);
+  // Address book: pick a saved card, or type a new one and save it for next time.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [usingNew, setUsingNew] = useState(false);
+  const [draft, setDraft] = useState<Address>(EMPTY_ADDRESS);
+  const [saveToBook, setSaveToBook] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [order, setOrder] = useState<{ id: string; ref: string; total: number } | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -55,8 +60,16 @@ export default function CheckoutPage() {
   }, [authLoading, fbUser, router]);
 
   useEffect(() => {
-    if (profile?.addresses?.length && address.fullName === "") {
-      setAddress(profile.addresses[0]);
+    if (!profile) return;
+    // Pre-select the default saved address once the profile lands; a customer
+    // with an empty book goes straight to the form.
+    const list = normalizeAddresses(profile.addresses);
+    if (list.length) {
+      if (selectedId === null && !usingNew) {
+        setSelectedId(list.find((a) => a.isDefault)?.id || list[0].id!);
+      }
+    } else if (!usingNew) {
+      setUsingNew(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
@@ -66,27 +79,60 @@ export default function CheckoutPage() {
   const methods: PaymentMethod[] = settings.paymentMethods || [];
   const method = methods.find((m) => m.id === payMethodId) || methods[0] || null;
 
-  const field = (key: keyof Address, label: string, opts?: { type?: string; required?: boolean; half?: boolean }) => (
-    <label className={cn("block", opts?.half && "sm:col-span-1", !opts?.half && "sm:col-span-2")}>
-      <input
-        className="input"
-        type={opts?.type || "text"}
-        required={opts?.required !== false}
-        placeholder={label}
-        value={address[key]}
-        onChange={(e) => setAddress({ ...address, [key]: e.target.value })}
-        autoComplete={
-          { fullName: "name", line1: "address-line1", line2: "address-line2", city: "address-level2",
-            subCity: "address-level3", region: "address-level1", postalCode: "postal-code", country: "country-name", phone: "tel" }[key]
-        }
-      />
-    </label>
-  );
+  const book = normalizeAddresses(profile?.addresses);
+  const picked = book.find((a) => a.id === selectedId) || null;
+  const address: Address = usingNew ? draft : picked || EMPTY_ADDRESS;
+  const missing = missingAddressFields(address);
+
+  const editPicked = () => {
+    setDraft(picked ? { ...picked } : { ...EMPTY_ADDRESS });
+    setUsingNew(true);
+    setSelectedId(null);
+  };
+
+  const backToBook = () => {
+    setUsingNew(false);
+    const list = normalizeAddresses(profile?.addresses);
+    setSelectedId(list.find((a) => a.isDefault)?.id || list[0]?.id || null);
+  };
+
+  const continueToPayment = async () => {
+    if (missing.length) {
+      toast(`Still needed: ${missing.join(", ")}`, "err");
+      return;
+    }
+    // A brand-new address can be kept for next time.
+    if (usingNew && saveToBook) {
+      try {
+        await updateDoc(doc(db, "users", fbUser!.uid), {
+          addresses: withAddress(book, { ...address, label: address.label || "New address", isDefault: book.length === 0 }, { makeDefault: book.length === 0 }),
+        });
+        toast("Address saved to your account");
+      } catch {
+        toast("Order continues — but we could not save that address", "err");
+      }
+    }
+    setStep(2);
+    window.scrollTo({ top: 0 });
+  };
 
   const placeOrder = async () => {
     setPlacing(true);
     try {
       const token = await fbUser!.getIdToken();
+      // Strip the address-book bookkeeping fields — the order only needs where
+      // the cloth is going.
+      const shippingAddress: Address = {
+        fullName: address.fullName,
+        line1: address.line1,
+        line2: address.line2 || "",
+        city: address.city,
+        subCity: address.subCity || "",
+        region: address.region,
+        postalCode: address.postalCode || "",
+        country: address.country || "Ethiopia",
+        phone: address.phone,
+      };
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -95,7 +141,7 @@ export default function CheckoutPage() {
             productId: l.productId, slug: l.slug, name: l.name, color: l.color,
             size: l.size, qty: l.qty, unitPrice: l.unitPrice,
           })),
-          shippingAddress: address,
+          shippingAddress,
           paymentMethodId: method?.id || "",
           paymentMethodName: method?.name || "",
         }),
@@ -203,29 +249,71 @@ export default function CheckoutPage() {
           {step === 1 && (
             <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Where it&apos;s going</h1>
-              <form
-                className="mt-8 grid gap-5 sm:grid-cols-2"
-                onSubmit={(e) => { e.preventDefault(); setStep(2); window.scrollTo({ top: 0 }); }}
+
+              {book.length > 0 && !usingNew && (
+                <div className="mt-8">
+                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Ship to</p>
+                  <ul className="mt-3 grid gap-4 sm:grid-cols-2">
+                    {book.map((a) => (
+                      <li key={a.id}>
+                        <AddressCard
+                          address={a}
+                          selected={a.id === selectedId}
+                          onSelect={() => setSelectedId(a.id!)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                  <button onClick={editPicked} className="u-link mt-5 text-[12px] uppercase tracking-[0.2em] text-ember">
+                    {picked ? "Edit this address" : "+ Use a different address"}
+                  </button>
+                </div>
+              )}
+
+              {usingNew && (
+                <div className="mt-8">
+                  {book.length > 0 && (
+                    <button onClick={backToBook} className="u-link mb-5 text-[11px] uppercase tracking-[0.18em] text-ember">
+                      ← Back to saved addresses
+                    </button>
+                  )}
+                  <AddressFields address={draft} onChange={setDraft} showLabel={book.length > 0} />
+
+                  {book.length > 0 && (
+                    <label className="mt-6 flex cursor-pointer items-center gap-3 border border-line p-4 text-[12px] leading-relaxed">
+                      <input
+                        type="checkbox"
+                        checked={saveToBook}
+                        onChange={(e) => setSaveToBook(e.target.checked)}
+                        className="h-4 w-4 shrink-0 accent-ember"
+                      />
+                      <span>
+                        Save this address to my account — next time checkout is one tap.
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {missing.length > 0 && (
+                <p className="mt-5 text-[12px] text-ember">
+                  Still needed: {missing.join(", ")}
+                </p>
+              )}
+
+              <button
+                onClick={continueToPayment}
+                disabled={missing.length > 0}
+                className="mt-8 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {field("fullName", "Full name", { half: true })}
-                {field("phone", "Phone", { half: true, type: "tel" })}
-                {field("line1", "Street / landmark — e.g. Bole Rwanda St, near Getu Commercial")}
-                {field("line2", "Apartment, building, office (optional)", { required: false })}
-                {field("city", "City", { half: true })}
-                {field("subCity", "Sub-city / woreda — e.g. Bole, Yeka, Arada", { half: true, required: false })}
-                {field("region", "Region", { half: true })}
-                <button
-                  className="mt-4 border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember sm:col-span-2"
-                >
-                  Continue to payment →
-                </button>
-              </form>
+                Continue to payment →
+              </button>
             </StepPanel>
           )}
 
           {/* STEP 2 — Payment instructions */}
           {step === 2 && order && (
-            <StepPanel>
+            <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Pay it</h1>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
                 Order <strong>{order.ref}</strong> is reserved. Pick how you&apos;re paying, send
@@ -316,7 +404,7 @@ export default function CheckoutPage() {
 
           {/* STEP 3 — Reference + submit */}
           {step === 3 && order && (
-            <StepPanel>
+            <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Last thing</h1>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
                 Type the transfer reference from your banking app so Jo can match your payment

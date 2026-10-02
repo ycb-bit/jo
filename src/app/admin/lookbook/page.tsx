@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/lib/store";
 import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { LookImage } from "@/components/look-image";
+import { UploadBox } from "@/components/upload-box";
 import type { Look } from "@/lib/types";
 
 export default function AdminLookbook() {
@@ -16,7 +17,6 @@ export default function AdminLookbook() {
   const [uri, setUri] = useState<string | null>(null); // compressed, ready to save
   const [busy, setBusy] = useState(false);
   const [compressing, setCompressing] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const q = query(collection(db, "lookbook"), orderBy("createdAt", "desc"));
@@ -57,7 +57,6 @@ export default function AdminLookbook() {
       setTitle("");
       setFile(null);
       setUri(null);
-      if (fileInput.current) fileInput.current.value = "";
     } catch (e) {
       toast(e instanceof Error ? e.message : "Upload failed", "err");
     } finally {
@@ -98,26 +97,28 @@ export default function AdminLookbook() {
                 onChange={(e) => setTitle(e.target.value)}
               />
             </label>
-            <label className="block">
+            <div>
               <span className="opacity-60">Photo * — auto-compressed, stored in the database (no bucket)</span>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="image/*"
-                className="mt-2 block w-full text-[12px] opacity-80"
-                onChange={(e) => onPick(e.target.files?.[0] || null)}
-              />
-            </label>
-            {compressing && <p className="text-[11px] text-ember">Compressing…</p>}
-            {uri && !compressing && (
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={uri} alt="Preview" className="h-16 w-16 object-cover" />
-                <span className="text-[11px] text-ember">
-                  Ready — {(uri.length / 1024).toFixed(0)} KB after compression
-                </span>
-              </div>
-            )}
+              <UploadBox
+                dark
+                className="mt-2"
+                disabled={compressing || busy}
+                label={file ? file.name : "Drop a photo here or click to browse"}
+                hint="JPG / PNG / HEIC — one frame at a time"
+                onFiles={(files) => onPick(files[0] || null)}
+              >
+                {compressing && <p className="mt-3 text-[11px] text-ember">Compressing…</p>}
+                {uri && !compressing && (
+                  <div className="mt-4 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={uri} alt="Preview" className="h-16 w-16 object-cover" />
+                    <span className="text-[11px] text-ember">
+                      Ready — {(uri.length / 1024).toFixed(0)} KB after compression
+                    </span>
+                  </div>
+                )}
+              </UploadBox>
+            </div>
           </div>
           <div className="flex items-end">
             <button

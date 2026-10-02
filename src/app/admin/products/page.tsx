@@ -7,6 +7,7 @@ import { collection, doc, onSnapshot } from "firebase/firestore";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { formatMoney, totalStock, cn, slugify } from "@/lib/utils";
 import { CURRENCY } from "@/lib/theme";
+import { UploadBox } from "@/components/upload-box";
 import type { Product } from "@/lib/types";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -370,31 +371,17 @@ export default function AdminProducts() {
 
               <div>
                 <span className="opacity-60">Images (up to 6 — auto-compressed, no bucket needed)</span>
-                <label
-                  className="mt-2 flex cursor-pointer flex-col items-center justify-center border border-dashed border-bone/30 p-6 text-center transition-colors hover:border-bone"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith("image/")).slice(0, 6);
-                    if (files.length) await pickImages(files);
+                <UploadBox
+                  dark
+                  multiple
+                  className="mt-2"
+                  label="Drop photos here or click to browse"
+                  hint="JPG / PNG / HEIC — up to 6, auto-squeezed to fit Firestore"
+                  onFiles={async (files) => {
+                    const images = files.filter((f) => f.type.startsWith("image/")).slice(0, 6);
+                    if (images.length) await pickImages(images);
                   }}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []).slice(0, 6);
-                      await pickImages(files);
-                      e.target.value = "";
-                    }}
-                  />
-                  <span className="text-[13px] opacity-70">Drop photos here or click to browse</span>
-                  <span className="mt-1 text-[11px] opacity-40">
-                    JPG / PNG / HEIC — up to 6, auto-squeezed to fit Firestore
-                  </span>
-                </label>
+                />
 
                 {/* Storage budget — images live inside the product document */}
                 {imageBytes > 0 && (

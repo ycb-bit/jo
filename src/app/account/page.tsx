@@ -6,15 +6,16 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/store";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "firebase/firestore";
 import { formatMoney, timeAgo, cn } from "@/lib/utils";
 import { ORDER_STATUS_LABEL, type Order, type Address } from "@/lib/types";
+import {
+  EMPTY_ADDRESS, missingAddressFields, normalizeAddresses, withAddress, withoutAddress,
+} from "@/lib/addresses";
+import { AddressCard } from "@/components/address-card";
+import { AddressFields } from "@/components/address-fields";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-
-const EMPTY_ADDR: Address = {
-  fullName: "", line1: "", line2: "", city: "", region: "", postalCode: "", country: "", phone: "",
-};
 
 export default function AccountPage() {
   const { fbUser, profile, loading } = useAuth();
@@ -22,7 +23,11 @@ export default function AccountPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [tab, setTab] = useState<"orders" | "addresses">("orders");
-  const [newAddr, setNewAddr] = useState<Address>(EMPTY_ADDR);
+  // Address book editor state. The list itself lives in Firestore (profile).
+  const [draft, setDraft] = useState<Address>(EMPTY_ADDRESS);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [makeDefault, setMakeDefault] = useState(false);
+  const [savingAddr, setSavingAddr] = useState(false);
 
   useEffect(() => {
     if (!loading && !fbUser) router.replace("/login?next=/account");
@@ -38,15 +43,52 @@ export default function AccountPage() {
     return <div className="mx-auto max-w-[1440px] px-5 py-24"><div className="skeleton h-80 w-full" /></div>;
   }
 
+  // ---- Address book -------------------------------------------------------
+  // `profile` is a live listener (see auth-context), so writes come straight
+  // back and both this page and checkout stay in sync.
+  const book = normalizeAddresses(profile.addresses);
+
+  const persist = async (next: Address[], okMessage: string) => {
+    try {
+      await updateDoc(doc(db, "users", fbUser!.uid), { addresses: next });
+      toast(okMessage);
+    } catch {
+      toast("Could not save — check your connection", "err");
+    }
+  };
+
+  const startNew = () => {
+    setDraft({ ...EMPTY_ADDRESS });
+    setEditingId(null);
+    setMakeDefault(book.length === 0);
+  };
+
+  const startEdit = (a: Address) => {
+    setDraft({ ...a });
+    setEditingId(a.id || null);
+    setMakeDefault(!!a.isDefault);
+  };
+
   const saveAddress = async () => {
-    if (!fbUser || !newAddr.line1 || !newAddr.city) {
-      toast("Name, street and city are required", "err");
+    const missing = missingAddressFields(draft);
+    if (missing.length) {
+      toast(`Still needed: ${missing.join(", ")}`, "err");
       return;
     }
-    await updateDoc(doc(db, "users", fbUser.uid), { addresses: arrayUnion(newAddr) });
-    setNewAddr(EMPTY_ADDR);
-    toast("Address saved");
+    setSavingAddr(true);
+    await persist(
+      withAddress(book, { ...draft, isDefault: makeDefault }, { makeDefault }),
+      editingId ? "Address updated" : "Address saved"
+    );
+    setSavingAddr(false);
+    startNew();
   };
+
+  const removeAddress = async (id: string) =>
+    persist(withoutAddress(book, id), "Address removed");
+
+  const makeDefaultAddress = async (id: string) =>
+    persist(book.map((a) => ({ ...a, isDefault: a.id === id })), "Default address updated");
 
   const statusTone = (s: string) =>
     s === "confirmed" || s === "shipped" || s === "delivered"
@@ -121,35 +163,87 @@ export default function AccountPage() {
       )}
 
       {tab === "addresses" && (
-        <div className="mt-8 grid gap-8 md:grid-cols-2">
-          <div className="space-y-4">
-            {profile.addresses?.length === 0 && (
-              <p className="text-[13px] opacity-60">No saved addresses yet — add one to speed up checkout.</p>
-            )}
-            {profile.addresses?.map((a, i) => (
-              <div key={i} className="border border-line p-5 text-[13px] leading-relaxed">
-                <p className="font-medium">{a.fullName}</p>
-                <p className="opacity-70">{a.line1}{a.line2 ? `, ${a.line2}` : ""}</p>
-                <p className="opacity-70">{a.city}, {a.region} {a.postalCode}</p>
-                <p className="opacity-70">{a.country} · {a.phone}</p>
-              </div>
-            ))}
-          </div>
-          <div className="border border-ink p-6">
-            <h3 className="font-display text-sm uppercase tracking-[0.16em]">Add an address</h3>
-            <div className="mt-4 space-y-3">
-              {(["fullName", "line1", "line2", "city", "region", "postalCode", "country", "phone"] as const).map((k) => (
-                <input
-                  key={k}
-                  className="input"
-                  placeholder={{ fullName: "Full name", line1: "Address line 1", line2: "Line 2 (optional)", city: "City", region: "State / Region", postalCode: "Postal code", country: "Country", phone: "Phone" }[k]}
-                  value={newAddr[k]}
-                  onChange={(e) => setNewAddr({ ...newAddr, [k]: e.target.value })}
-                />
-              ))}
-              <button onClick={saveAddress} className="w-full border border-ink bg-ink py-3 text-[11px] uppercase tracking-[0.2em] text-bone hover:bg-ember hover:border-ember">
-                Save address
+        <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_380px]">
+          <div>
+            <div className="flex items-baseline justify-between gap-4">
+              <h3 className="font-display text-sm uppercase tracking-[0.16em]">
+                Saved addresses ({book.length})
+              </h3>
+              <button onClick={startNew} className="u-link text-[11px] uppercase tracking-[0.18em] text-ember">
+                + Add address
               </button>
+            </div>
+
+            {book.length === 0 ? (
+              <p className="mt-6 border border-line p-10 text-center text-[13px] leading-relaxed opacity-60">
+                No saved addresses yet. Add one on the right and checkout becomes a single tap —
+                we&apos;ll pre-select it every time.
+              </p>
+            ) : (
+              <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+                {book.map((a) => (
+                  <li key={a.id}>
+                    <AddressCard
+                      address={a}
+                      actions={
+                        <>
+                          {!a.isDefault && (
+                            <button onClick={() => makeDefaultAddress(a.id!)} className="u-link text-ember">
+                              Make default
+                            </button>
+                          )}
+                          <button onClick={() => startEdit(a)} className="u-link">Edit</button>
+                          <button onClick={() => removeAddress(a.id!)} className="u-link text-red-700">
+                            Remove
+                          </button>
+                        </>
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p className="mt-5 max-w-md text-[12px] leading-relaxed opacity-55">
+              Your default address is the one checkout picks for you — change it any time with
+              &ldquo;Make default&rdquo;.
+            </p>
+          </div>
+
+          <div className="border border-ink p-6">
+            <h3 className="font-display text-sm uppercase tracking-[0.16em]">
+              {editingId ? "Edit address" : "Add an address"}
+            </h3>
+            <div className="mt-5">
+              <AddressFields address={draft} onChange={setDraft} showLabel />
+            </div>
+
+            <label className="mt-6 flex cursor-pointer items-center gap-3 text-[12px]">
+              <input
+                type="checkbox"
+                checked={makeDefault}
+                onChange={(e) => setMakeDefault(e.target.checked)}
+                className="h-4 w-4 accent-ember"
+              />
+              Use as my default address
+            </label>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={saveAddress}
+                disabled={savingAddr}
+                className="flex-1 border border-ink bg-ink py-3 text-[11px] uppercase tracking-[0.2em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:opacity-50"
+              >
+                {savingAddr ? "Saving…" : editingId ? "Save changes" : "Save address"}
+              </button>
+              {editingId && (
+                <button
+                  onClick={startNew}
+                  className="border border-line px-5 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:border-ink"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </div>
         </div>

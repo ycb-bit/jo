@@ -1,6 +1,12 @@
 export type Role = "customer" | "admin";
 
 export type Address = {
+  /** Stable id so the address book can edit/delete one card by reference. */
+  id?: string;
+  /** "Home", "Studio", "Mum's place" — shown on the saved-address cards. */
+  label?: string;
+  /** Pre-selected at checkout. Exactly one address should carry this. */
+  isDefault?: boolean;
   fullName: string;
   line1: string;
   line2?: string;
