@@ -43,6 +43,8 @@ export default function CheckoutPage() {
   const [saveToBook, setSaveToBook] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [order, setOrder] = useState<{ id: string; ref: string; total: number } | null>(null);
+  /** Frozen copy of where the order is going, shown while it is being paid. */
+  const [shipTo, setShipTo] = useState<Address>(EMPTY_ADDRESS);
   const [file, setFile] = useState<File | null>(null);
   const [receiptRef, setReceiptRef] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -112,11 +114,16 @@ export default function CheckoutPage() {
         toast("Order continues — but we could not save that address", "err");
       }
     }
-    setStep(2);
-    window.scrollTo({ top: 0 });
+    // Step 2 only makes sense once the order exists, so create it here. Doing
+    // this the button's job is what made "Pay & prove" render as an empty page.
+    await placeOrder();
   };
 
   const placeOrder = async () => {
+    if (missing.length) {
+      toast(`Still needed: ${missing.join(", ")}`, "err");
+      return;
+    }
     setPlacing(true);
     try {
       const token = await fbUser!.getIdToken();
@@ -149,6 +156,7 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(data.error || "Could not create order");
       track("begin_checkout", { ref: data.orderId, value: data.total });
       setOrder({ id: data.orderId, ref: data.ref, total: data.total });
+      setShipTo(shippingAddress);
       setStep(2);
       window.scrollTo({ top: 0 });
     } catch (err) {
@@ -244,8 +252,9 @@ export default function CheckoutPage() {
 
       <div className="grid gap-14 lg:grid-cols-[1fr_400px]">
         <div>
-          {/* STEP 1 — Address */}
-          {step === 1 && (
+          {/* STEP 1 — Address. Also the fallback whenever there is no order yet, so a
+              blank left column can never happen. */}
+          {(step === 1 || !order) && (
             <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Where it&apos;s going</h1>
 
@@ -302,11 +311,14 @@ export default function CheckoutPage() {
 
               <button
                 onClick={continueToPayment}
-                disabled={missing.length > 0}
+                disabled={missing.length > 0 || placing}
                 className="mt-8 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Continue to payment →
+                {placing ? "Placing your order…" : "Continue to payment →"}
               </button>
+              <p className="mt-3 text-center text-[11px] uppercase tracking-[0.16em] opacity-50">
+                Nothing is charged here — you pay by bank transfer on the next step
+              </p>
             </StepPanel>
           )}
 
@@ -318,6 +330,15 @@ export default function CheckoutPage() {
                 Order <strong>{order.ref}</strong> is reserved. Pick how you&apos;re paying, send
                 the exact amount, then upload your receipt so Jo can verify it.
               </p>
+
+              {/* Where it is going — read-only now that the order exists, so a
+                  second order can't be created by going back and changing it. */}
+              <div className="mt-8 max-w-md">
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Shipping to</p>
+                <div className="mt-3">
+                  <AddressCard address={shipTo} />
+                </div>
+              </div>
 
               {/* Payment method picker */}
               {methods.length > 0 && (
