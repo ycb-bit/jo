@@ -128,7 +128,6 @@ export default function CheckoutPage() {
         line2: address.line2 || "",
         city: address.city,
         subCity: address.subCity || "",
-        region: address.region,
         postalCode: address.postalCode || "",
         country: address.country || "Ethiopia",
         phone: address.phone,

@@ -19,7 +19,6 @@ const AUTOCOMPLETE: Partial<Record<keyof Address, string>> = {
   line2: "address-line2",
   city: "address-level2",
   subCity: "address-level3",
-  region: "address-level1",
   country: "country-name",
 };
 
@@ -62,7 +61,6 @@ export function AddressFields({
       {field("line2", "Apartment, building, office (optional)", { wide: true, required: false })}
       {field("city", "City")}
       {field("subCity", "Sub-city / woreda — e.g. Bole, Yeka, Arada", { required: false })}
-      {field("region", "Region")}
       <p className="self-end pb-2 text-[12px] leading-relaxed opacity-55">
         Shipping is free storewide, worldwide. We default to Ethiopia — tell us if it&apos;s
         going elsewhere.

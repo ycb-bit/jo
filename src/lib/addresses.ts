@@ -15,7 +15,6 @@ export const EMPTY_ADDRESS: Address = {
   line2: "",
   city: "",
   subCity: "",
-  region: "",
   postalCode: "",
   country: "Ethiopia",
   phone: "",
@@ -36,7 +35,6 @@ export function missingAddressFields(a: Partial<Address>): string[] {
   if (!a.phone?.trim()) missing.push("Phone");
   if (!a.line1?.trim()) missing.push("Street");
   if (!a.city?.trim()) missing.push("City");
-  if (!a.region?.trim()) missing.push("Region");
   return missing;
 }
 

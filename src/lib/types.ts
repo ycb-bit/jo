@@ -13,7 +13,8 @@ export type Address = {
   city: string;
   /** Ethiopia: woreda / sub-city (Bole, Yeka…) — optional. */
   subCity?: string;
-  region: string;
+  /** Legacy — no longer collected on the address form. */
+  region?: string;
   /** Legacy — not collected anymore (rarely used in Ethiopia). */
   postalCode?: string;
   country: string;

@@ -7,6 +7,7 @@ import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { LookImage } from "@/components/look-image";
 import { UploadBox } from "@/components/upload-box";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { Look } from "@/lib/types";
 
 export default function AdminLookbook() {
@@ -17,6 +18,7 @@ export default function AdminLookbook() {
   const [uri, setUri] = useState<string | null>(null); // compressed, ready to save
   const [busy, setBusy] = useState(false);
   const [compressing, setCompressing] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Look | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, "lookbook"), orderBy("createdAt", "desc"));
@@ -65,12 +67,15 @@ export default function AdminLookbook() {
   };
 
   const remove = async (l: Look) => {
-    if (!confirm("Remove this frame from the album?")) return;
+    setBusy(true);
     try {
       await deleteDoc(doc(db, "lookbook", l.id));
       toast("Frame removed");
+      setPendingDelete(null);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Delete failed", "err");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -143,7 +148,7 @@ export default function AdminLookbook() {
                   {l.title || "Untitled"}
                 </span>
                 <button
-                  onClick={() => remove(l)}
+                  onClick={() => setPendingDelete(l)}
                   className="text-[10px] uppercase tracking-[0.16em] text-bone/70 hover:text-red-400"
                 >
                   Delete
@@ -155,6 +160,26 @@ export default function AdminLookbook() {
       ) : (
         <p className="mt-12 text-center text-[13px] opacity-50">No frames yet — add the first one above.</p>
       )}
+
+      {/* Deleting a frame is permanent — make the operator say so first. */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Remove this frame?"
+        intro={
+          pendingDelete ? (
+            <>
+              <strong className="font-medium">{pendingDelete.title || "Untitled frame"}</strong>{" "}
+              will disappear from the lookbook on the home page and /lookbook. This cannot be
+              undone.
+            </>
+          ) : null
+        }
+        confirmWord={pendingDelete?.title?.trim() || "delete"}
+        confirmLabel="Remove frame"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+        busy={busy}
+      />
     </div>
   );
 }

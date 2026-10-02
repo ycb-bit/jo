@@ -8,6 +8,7 @@ import { compressImageToDataUri } from "@/lib/image-compress";
 import { formatMoney, totalStock, cn, slugify } from "@/lib/utils";
 import { CURRENCY } from "@/lib/theme";
 import { UploadBox } from "@/components/upload-box";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { Product } from "@/lib/types";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -43,7 +44,6 @@ export default function AdminProducts() {
   const [existing, setExisting] = useState<string[]>([]); // images already on the product
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Firestore hard-limits a document to 1 MiB. Images live inside the product
   // doc, so the set has to fit under that with room for the product fields.
@@ -147,7 +147,6 @@ export default function AdminProducts() {
     } finally {
       setBusy(false);
       setPendingDelete(null);
-      setDeleteConfirmText("");
     }
   };
 
@@ -221,7 +220,15 @@ export default function AdminProducts() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Save failed");
-      toast(draft.id ? "Product updated" : "Product created — it's live");
+      const live = draft.published;
+      toast(
+        draft.id
+          ? live ? "Product updated — live in the shop" : "Product updated — still a draft, hidden from the shop"
+          : live
+            ? "Product created — it's live in the shop"
+            : "Product created as a draft — tick “Published” to show it in the shop",
+        live ? "ok" : "err"
+      );
       setDraft(null);
       setImages([]);
       setExisting([]);
@@ -245,7 +252,10 @@ export default function AdminProducts() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl uppercase">Products</h1>
-          <p className="mt-1 text-[13px] opacity-60">{products.length} in catalog · {products.filter((p) => p.published).length} live</p>
+          <p className="mt-1 text-[13px] opacity-60">
+            {products.length} in catalog · {products.filter((p) => p.published).length} live ·{" "}
+            {products.filter((p) => !p.published).length} draft (hidden from the shop)
+          </p>
         </div>
         <button onClick={startNew} className="border border-bone bg-bone px-6 py-3 text-[11px] uppercase tracking-[0.2em] text-ink hover:opacity-90">
           + New product
@@ -265,10 +275,10 @@ export default function AdminProducts() {
             </div>
             <div className="flex shrink-0 items-center gap-4 text-[11px] uppercase tracking-[0.14em]">
               <button onClick={() => togglePublish(p)} className={cn("u-link", p.published ? "text-ember" : "opacity-50")}>
-                {p.published ? "Live" : "Draft"}
+                {p.published ? "Live" : "Draft — not in the shop"}
               </button>
               <button onClick={() => startEdit(p)} className="u-link opacity-70 hover:opacity-100">Edit</button>
-              <button onClick={() => { setPendingDelete(p); setDeleteConfirmText(""); }} className="u-link opacity-40 hover:opacity-90 hover:text-red-400">Delete</button>
+              <button onClick={() => setPendingDelete(p)} className="u-link opacity-40 hover:opacity-90 hover:text-red-400">Delete</button>
             </div>
           </li>
         ))}
@@ -514,6 +524,11 @@ export default function AdminProducts() {
                   <input type="checkbox" checked={draft.published} onChange={(e) => setDraft({ ...draft, published: e.target.checked })} />
                   <span className="opacity-80">Published</span>
                 </label>
+                <span className="text-[11px] leading-relaxed opacity-55">
+                  {draft.published
+                    ? "Will appear in the shop and on the product page."
+                    : "Draft — hidden from the shop until you tick Published."}
+                </span>
               </div>
 
               <button onClick={save} disabled={busy} className="w-full bg-ember py-3.5 text-[11px] uppercase tracking-[0.2em] text-bone hover:opacity-90 disabled:opacity-50">
@@ -525,15 +540,24 @@ export default function AdminProducts() {
       )}
 
       {/* Delete confirmation — type the product name to confirm */}
-      {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-5 backdrop-blur-sm">
-          <div className="w-full max-w-md border border-bone/20 bg-ink p-7 text-bone">
-            <h2 className="font-display text-2xl uppercase">Delete this product?</h2>
-            <p className="mt-3 text-[13px] leading-relaxed opacity-75">
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete this product?"
+        intro={
+          pendingDelete ? (
+            <>
               <strong className="font-medium">{pendingDelete.name}</strong> will be removed from
               the shop immediately. This cannot be undone.
-            </p>
-
+            </>
+          ) : null
+        }
+        confirmWord={pendingDelete?.name}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+        busy={busy}
+      >
+        {pendingDelete && (
+          <>
             <dl className="mt-5 space-y-1.5 border-y border-bone/10 py-4 text-[12px]">
               <div className="flex justify-between gap-4">
                 <dt className="opacity-55">Price</dt>
@@ -541,7 +565,7 @@ export default function AdminProducts() {
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="opacity-55">Stock on hand</dt>
-                <dd className="tabular-nums">{totalStock(pendingDelete.stock || {})}</dd>
+                <dd className="tabular-nums">{totalStock(pendingDelete.stock || {})} </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="opacity-55">Photos</dt>
@@ -557,36 +581,9 @@ export default function AdminProducts() {
               Past orders keep their own copy of the name, price and options, so order history
               and receipts stay correct.
             </p>
-
-            <label className="mt-5 block text-[11px] uppercase tracking-[0.18em] opacity-60">
-              Type <span className="text-bone">{pendingDelete.name}</span> to confirm
-            </label>
-            <input
-              className="input mt-2"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => { setPendingDelete(null); setDeleteConfirmText(""); }}
-                className="flex-1 border border-bone/30 px-4 py-3 text-[11px] uppercase tracking-[0.2em] opacity-70 hover:opacity-100"
-              >
-                Keep it
-              </button>
-              <button
-                onClick={() => remove(pendingDelete)}
-                disabled={busy || deleteConfirmText.trim() !== pendingDelete.name.trim()}
-                className="flex-1 bg-ember px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-bone hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                {busy ? "Deleting…" : "Delete permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }
