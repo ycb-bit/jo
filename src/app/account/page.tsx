@@ -142,7 +142,11 @@ export default function AccountPage() {
             </div>
           ) : (
             <ul className="divide-y divide-line border-y border-line">
-              {orders.map((o) => (
+              {orders.map((o) => {
+                // A legacy or malformed doc can be missing items — guard once
+                // here so one bad order can never blank the whole list.
+                const items = o.items || [];
+                return (
                 <li key={o.id}>
                   <Link href={`/order/${o.id}`} className="flex flex-wrap items-center justify-between gap-3 py-5 transition-colors hover:bg-bone-dim/40">
                     <div className="min-w-0">
@@ -151,11 +155,11 @@ export default function AccountPage() {
                           means opening every order to find the one being asked
                           about. First three pieces, then the overflow count. */}
                       <p className="mt-0.5 text-[12px] opacity-60">
-                        {(o.items || []).slice(0, 3).map((it) => `${it.name} ×${it.qty}`).join(" · ")}
-                        {o.items.length > 3 && ` · +${o.items.length - 3} more`}
+                        {items.slice(0, 3).map((it) => `${it.name} ×${it.qty}`).join(" · ")}
+                        {items.length > 3 && ` · +${items.length - 3} more`}
                       </p>
                       <p className="text-[11px] opacity-50 tabular-nums">
-                        {timeAgo(o.createdAt)} · {o.items.length} item{o.items.length === 1 ? "" : "s"} · {formatMoney(o.total, o.currency)}
+                        {timeAgo(o.createdAt)} · {items.length} item{items.length === 1 ? "" : "s"} · {formatMoney(o.total, o.currency)}
                       </p>
                     </div>
                     <span className={cn("text-[11px] uppercase tracking-[0.18em]", statusTone(o.status))}>
@@ -163,7 +167,8 @@ export default function AccountPage() {
                     </span>
                   </Link>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
