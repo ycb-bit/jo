@@ -12,6 +12,7 @@ import { getDownloadURL, ref as sRef } from "firebase/storage";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { formatMoney, timeAgo } from "@/lib/utils";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
+import { OrderRef } from "@/components/order-ref";
 import { cn } from "@/lib/utils";
 
 export default function OrderPage() {
@@ -96,6 +97,13 @@ export default function OrderPage() {
       <p className="mt-2 text-[13px] opacity-60">
         Placed {timeAgo(order.createdAt)} · {formatMoney(order.total, order.currency)}
       </p>
+
+      <OrderRef
+        value={order.ref || order.id.slice(0, 8)}
+        label="Reference code"
+        hint="Quote this when you talk to Jo about the order."
+        className="mt-6 max-w-xl"
+      />
 
       {/* Status timeline */}
       <div className="mt-12 border border-ink p-6 md:p-10">
@@ -183,6 +191,9 @@ export default function OrderPage() {
               <button onClick={submit} disabled={busy} className="mt-3 w-full border border-line py-3 text-[11px] uppercase tracking-[0.2em] hover:border-ink disabled:opacity-40">
                 Submit for verification
               </button>
+              <p className="mt-3 text-[12px] leading-relaxed opacity-55">
+                No receipt image? Just type the reference — Jo matches it in the bank statement.
+              </p>
             </div>
           )}
         </div>

@@ -37,7 +37,8 @@ export function Footer() {
           <div>
             <p className="mb-4 text-[11px] uppercase tracking-[0.22em] opacity-50">Support</p>
             <ul className="space-y-2.5">
-              <li><Link href="/account" className="u-link">Track an order</Link></li>
+              <li><Link href="/track" className="u-link">Track an order</Link></li>
+              <li><Link href="/account" className="u-link">Your account</Link></li>
               <li><Link href="/about#care" className="u-link">Garment care</Link></li>
               <li><Link href="/about#shipping" className="u-link">Shipping &amp; returns</Link></li>
             </ul>

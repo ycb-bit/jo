@@ -7,6 +7,7 @@ import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestor
 import { getDownloadURL, ref as sRef } from "firebase/storage";
 import { formatMoney, timeAgo, cn } from "@/lib/utils";
 import { ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
+import { addressLines } from "@/lib/addresses";
 
 const FILTERS: { key: string; label: string; statuses: OrderStatus[] }[] = [
   { key: "verify", label: "Verification queue", statuses: ["receipt_uploaded", "verifying"] },
@@ -25,6 +26,7 @@ export default function AdminOrders() {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     return onSnapshot(
@@ -49,11 +51,31 @@ export default function AdminOrders() {
     }
   };
 
+  /** Everything Jo needs to hand the parcel to a courier, as plain text. */
+  const copyContact = async () => {
+    if (!selected) return;
+    const a = selected.shippingAddress;
+    const block = [
+      selected.ref || selected.id.slice(0, 10),
+      a?.fullName,
+      a?.phone,
+      selected.email,
+      ...(a ? addressLines(a) : []),
+      a?.country || "Ethiopia",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(block);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   const act = async (action: "verify" | "reject" | "ship" | "deliver" | "cancel") => {
     if (!selected) return;
-    if (action === "verify") {
-      const mismatch = Math.abs(selected.total - 0) >= 0; // amount check happens against the transfer below
-    }
     setBusy(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -113,6 +135,7 @@ export default function AdminOrders() {
               )}>
                 <div className="min-w-0">
                   <p className="font-medium">{o.ref || o.id.slice(0, 10)} <span className="opacity-50">· {o.email}</span></p>
+                  <p className="text-[11px] tabular-nums opacity-50">{o.shippingAddress?.phone || "No phone on file"}</p>
                   <p className="text-[11px] opacity-50">
                     {timeAgo(o.createdAt)} · {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ").slice(0, 70)}
                   </p>
@@ -142,7 +165,9 @@ export default function AdminOrders() {
               <div className="flex items-center justify-between border-b border-bone/15 p-5">
                 <div>
                   <p className="font-display text-xl uppercase">{selected.ref || selected.id.slice(0, 10)}</p>
-                  <p className="text-[11px] opacity-50">{selected.email} · {timeAgo(selected.createdAt)}</p>
+                  <p className="text-[11px] opacity-50">
+                    {selected.email} · {selected.shippingAddress?.phone || "no phone"} · {timeAgo(selected.createdAt)}
+                  </p>
                 </div>
                 <button onClick={() => setSelected(null)} className="text-[11px] uppercase tracking-[0.14em] opacity-50 hover:opacity-100">Close</button>
               </div>
@@ -161,6 +186,80 @@ export default function AdminOrders() {
                     <span className="opacity-60">Paid via</span>
                     <span>{selected.paymentMethodName}</span>
                   </div>
+                )}
+                {selected.receiptMissing && (
+                  <p className="border border-ember p-4 text-[12px] leading-relaxed text-ember">
+                    Submitted with a reference but no receipt image — check the bank statement
+                    before you verify.
+                  </p>
+                )}
+                {selected.rejectionReason && (
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 opacity-60">Rejected because</span>
+                    <span className="text-right">{selected.rejectionReason}</span>
+                  </div>
+                )}
+                {selected.trackingNote && (
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 opacity-60">Tracking</span>
+                    <span className="text-right">{selected.trackingNote}</span>
+                  </div>
+                )}
+
+                {/* Who to ring, and where the parcel goes — the two things the
+                    desk reads first. Phone and email are one tap to call / mail. */}
+                <div className="border border-bone/15">
+                  <div className="flex items-center justify-between border-b border-bone/15 px-4 py-2.5">
+                    <p className="text-[11px] uppercase tracking-[0.18em] opacity-60">Customer</p>
+                    <button onClick={copyContact} className="text-[10px] uppercase tracking-[0.16em] text-ember transition-opacity hover:opacity-70">
+                      {copied ? "Copied ✓" : "Copy all"}
+                    </button>
+                  </div>
+                  <dl className="space-y-2.5 p-4">
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 opacity-50">Name</dt>
+                      <dd className="text-right font-medium">{selected.shippingAddress?.fullName || "—"}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 opacity-50">Phone</dt>
+                      <dd className="text-right">
+                        {selected.shippingAddress?.phone ? (
+                          <a
+                            href={`tel:${selected.shippingAddress.phone.replace(/[^\d+]/g, "")}`}
+                            className="u-link tabular-nums"
+                          >
+                            {selected.shippingAddress.phone}
+                          </a>
+                        ) : (
+                          <span className="opacity-40">Not given</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 opacity-50">Email</dt>
+                      <dd className="min-w-0 text-right">
+                        <a href={`mailto:${selected.email}`} className="u-link break-all">{selected.email}</a>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {selected.shippingAddress ? (
+                  <div className="border border-bone/15 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.18em] opacity-60">Ship to</p>
+                    <address className="mt-2 space-y-0.5 not-italic leading-relaxed opacity-85">
+                      {addressLines(selected.shippingAddress).map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                      {selected.shippingAddress.postalCode && <p>{selected.shippingAddress.postalCode}</p>}
+                      <p>{selected.shippingAddress.country || "Ethiopia"}</p>
+                      <p className="tabular-nums">{selected.shippingAddress.phone}</p>
+                    </address>
+                  </div>
+                ) : (
+                  <p className="border border-dashed border-bone/20 p-4 text-[12px] opacity-50">
+                    This order has no shipping address on file — check with the customer before packing.
+                  </p>
                 )}
                 <div>
                   <p className="mb-2 opacity-60">Receipt</p>
@@ -184,6 +283,38 @@ export default function AdminOrders() {
                     ))}
                   </ul>
                 </div>
+
+                {/* What happened to this order, newest first — the audit trail the
+                    desk needs when a customer asks why it was rejected. */}
+                <div>
+                  <p className="mb-2 opacity-60">Timeline</p>
+                  <ol className="space-y-1.5">
+                    {[...(selected.history || [])].reverse().map((h, i) => (
+                      <li key={i} className="flex gap-3 text-[12px] leading-relaxed">
+                        <span className="w-32 shrink-0 tabular-nums opacity-40">
+                          {new Date(h.at).toLocaleString()}
+                        </span>
+                        <span>
+                          {ORDER_STATUS_LABEL[h.status] || h.status}
+                          {h.note && <span className="opacity-60"> — {h.note}</span>}
+                        </span>
+                      </li>
+                    ))}
+                    {(selected.history || []).length === 0 && (
+                      <li className="text-[12px] opacity-40">No events recorded.</li>
+                    )}
+                  </ol>
+                </div>
+
+                <div className="border-t border-bone/15 pt-3 text-[11px] leading-relaxed opacity-40">
+                  <p>Order id {selected.id}</p>
+                  <p>Customer uid {selected.userId}</p>
+                  <p>
+                    Placed {new Date(selected.createdAt).toLocaleString()} · updated{" "}
+                    {timeAgo(selected.updatedAt)}
+                  </p>
+                </div>
+
                 <input
                   className="w-full border-b border-bone/25 bg-transparent py-2.5 text-[13px] outline-none placeholder:text-bone/30 focus:border-bone"
                   placeholder="Note (reason for rejection, tracking number…)"

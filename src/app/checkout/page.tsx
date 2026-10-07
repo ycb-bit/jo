@@ -14,6 +14,7 @@ import type { Address, PaymentMethod, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductArt } from "@/components/product-art";
 import { AddressCard } from "@/components/address-card";
+import { OrderRef } from "@/components/order-ref";
 import { AddressFields } from "@/components/address-fields";
 import {
   EMPTY_ADDRESS, missingAddressFields, normalizeAddresses, withAddress,
@@ -49,6 +50,7 @@ export default function CheckoutPage() {
   const [receiptRef, setReceiptRef] = useState("");
   const [uploading, setUploading] = useState(false);
   const [payMethodId, setPayMethodId] = useState<string>("");
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     return onSnapshot(doc(db, "settings", "store"), (snap) => {
@@ -192,7 +194,9 @@ export default function CheckoutPage() {
   };
 
   const submitForVerification = async () => {
+    setSubmitError("");
     if (!order || receiptRef.trim().length < 3) {
+      setSubmitError("Type the reference your bank or telebirr app gave you.");
       toast("Type the bank reference from your transfer", "err");
       return;
     }
@@ -212,9 +216,15 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(d.error || "Submit failed");
       cart.clear();
       track("receipt_submitted", { ref: order.id, name: receiptRef.trim() });
-      toast("Receipt submitted — Jo will verify it shortly");
+      toast(
+        d.receiptMissing
+          ? "Submitted — Jo will match the reference in the statement"
+          : "Receipt submitted — Jo will verify it shortly"
+      );
       router.push(`/order/${order.id}`);
     } catch (err) {
+      // Keep the message on the page too: a toast alone disappears before it is read.
+      setSubmitError(err instanceof Error ? err.message : "Submit failed");
       toast(err instanceof Error ? err.message : "Submit failed", "err");
     } finally {
       setUploading(false);
@@ -327,12 +337,15 @@ export default function CheckoutPage() {
             <StepPanel animate={false}>
               <h1 className="font-display text-4xl uppercase md:text-5xl">Pay it</h1>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
-                Order <strong>{order.ref}</strong> is reserved. Pick how you&apos;re paying, send
-                the exact amount, then upload your receipt so Jo can verify it.
+                Order reserved. Pick how you&apos;re paying, send the exact amount, then upload
+                your receipt so Jo can verify it.
               </p>
 
-              {/* Where it is going — read-only now that the order exists, so a
-                  second order can't be created by going back and changing it. */}
+              <OrderRef value={order.ref} className="mt-8" />
+
+              {/* Submitting the bank reference is the one required step — the
+                  receipt photo is optional and intentionally quiet, secondary
+                  to the core product. */}
               <div className="mt-8 max-w-md">
                 <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Shipping to</p>
                 <div className="mt-3">
@@ -396,69 +409,6 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div className="mt-8">
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Upload bank receipt (screenshot or PDF-style photo)</p>
-                <label className="mt-3 flex cursor-pointer flex-col items-center justify-center border border-dashed border-ink/30 p-10 text-center transition-colors hover:border-ink">
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                  {file ? (
-                    <span className="text-[13px]"><strong>{file.name}</strong> — {Math.round(file.size / 1024)} KB ✓</span>
-                  ) : (
-                    <span className="text-[13px] opacity-60">Click to choose a file — JPG, PNG or HEIC</span>
-                  )}
-                </label>
-                <button
-                  onClick={uploadReceipt}
-                  disabled={!file || uploading}
-                  className="mt-4 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {uploading ? "Uploading…" : "Upload receipt →"}
-                </button>
-                {file && (
-                  <button onClick={() => setStep(3)} className="u-link mt-4 block text-[11px] uppercase tracking-[0.18em] opacity-60">
-                    Skip for now — finish from your account later
-                  </button>
-                )}
-              </div>
-            </StepPanel>
-          )}
-
-          {/* STEP 3 — Reference + submit */}
-          {step === 3 && order && (
-            <StepPanel animate={false}>
-              <h1 className="font-display text-4xl uppercase md:text-5xl">Last thing</h1>
-              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
-                Type the transfer reference from your banking app so Jo can match your payment
-                to <strong>{order.ref}</strong> in the account.
-              </p>
-
-              {/* Which bank they paid from — repeated here so the reference is
-                  never submitted without the account it belongs to. */}
-              <div className="mt-6 max-w-md border border-line p-5 text-[13px]">
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">You paid via</p>
-                {method ? (
-                  <div className="mt-2 space-y-1.5">
-                    <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Method</span>
-                      <span className="text-right font-medium">{method.name}</span>
-                    </p>
-                    {method.type === "bank" && method.accountNumber && (
-                      <p className="flex justify-between gap-4">
-                        <span className="opacity-60">Account</span>
-                        <span className="tabular-nums select-all">{method.accountNumber}</span>
-                      </p>
-                    )}
-                    <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Order</span>
-                      <span className="tabular-nums">{order.ref}</span>
-                    </p>
-                  </div>
-                ) : (
-                  <p className="mt-2 leading-relaxed opacity-70">
-                    No method was recorded — type the reference anyway and Jo will confirm.
-                  </p>
-                )}
-              </div>
-
               <div className="mt-6 max-w-md">
                 <label className="text-[11px] uppercase tracking-[0.2em] opacity-60">
                   {method?.type === "bank" ? `${method.name} transfer reference` : "Payment reference"}
@@ -473,22 +423,92 @@ export default function CheckoutPage() {
                 />
                 <p className="mt-2 text-[12px] leading-relaxed opacity-55">
                   {method?.type === "bank"
-                    ? "This is the code your bank or telebirr app generated. Jo looks for exactly this in the account statement."
-                    : "Copy this from your payment confirmation so Jo can match it to your order."}
-                </p>
-                <button
-                  onClick={submitForVerification}
-                  disabled={uploading || receiptRef.trim().length < 3}
-                  className="mt-6 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {uploading ? "Submitting…" : "Submit for verification"}
-                </button>
-                <p className="mt-4 text-[12px] leading-relaxed opacity-55">
-                  Verification is done by Jo himself — usually within a few hours. You can watch
-                  the status live from your account. If it&apos;s rejected you&apos;ll be able to
-                  submit a new receipt from this page.
+                    ? "The code your bank or telebirr app generated after the transfer."
+                    : "The code your payment confirmation shows."}
                 </p>
               </div>
+
+              {/* Optional, deliberately IS quiet: most customers just type the
+                  reference. The photo only helps when the statement match is
+                  near-absent, e.g. it failed once. */}
+              <details className="mt-5 max-w-md text-[13px]">
+                <summary className="cursor-pointer select-none text-[12px] opacity-50 transition-opacity hover:opacity-80">
+                  {file ? `Receipt photo attached — ${Math.round(file.size / 1024)} KB` : "Add a receipt photo (optional)"}
+                </summary>
+                <label className="mt-3 flex cursor-pointer items-center justify-center border border-dashed border-line p-6 text-center transition-colors hover:border-ink">
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <span className="text-[12px] opacity-60">{file ? "Choose a different file — JPG, PNG or HEIC" : "Click to choose — JPG, PNG or HEIC"}</span>
+                </label>
+                {file && (
+                  <button onClick={uploadReceipt} disabled={uploading} className="u-link mt-3 text-[11px] uppercase tracking-[0.18em] text-ember">
+                    {uploading ? "Uploading…" : "Attach it to this order →"}
+                  </button>
+                )}
+              </details>
+
+              <button
+                onClick={submitForVerification}
+                disabled={uploading || receiptRef.trim().length < 3}
+                className="mt-8 w-full max-w-md border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {uploading ? "Submitting…" : "Submit & finish →"}
+              </button>
+              {submitError && (
+                <p className="mt-4 max-w-md border border-ember p-4 text-[13px] leading-relaxed text-ember">
+                  {submitError}
+                </p>
+              )}
+            </StepPanel>
+          )}
+
+          {/* STEP 3 — Done: order received, payment being matched */}
+          {step === 3 && order && (
+            <StepPanel animate={false}>
+              <h1 className="font-display text-4xl uppercase md:text-5xl">Done</h1>
+              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
+                Order received. Jo matches your transfer in the account, usually within a few
+                hours, and you&apos;ll see the status move live.
+              </p>
+
+              {/* What Jo is matching, so &quot;which transfer?&quot; never comes up. */}
+              <div className="mt-6 max-w-md border border-line p-5 text-[13px]">
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">What Jo is matching</p>
+                <div className="mt-2 space-y-1.5">
+                  <p className="flex justify-between gap-4">
+                    <span className="opacity-60">Transfer</span>
+                    <span className="text-right font-medium">{receiptRef.trim()}</span>
+                  </p>
+                  {method && (
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Method</span>
+                      <span className="text-right">{method.name}</span>
+                    </p>
+                  )}
+                  {method?.type === "bank" && method.accountNumber && (
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Account</span>
+                      <span className="tabular-nums select-all">{method.accountNumber}</span>
+                    </p>
+                  )}
+                  {file ? (
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Receipt photo</span>
+                      <span className="text-right">Attached ✓</span>
+                    </p>
+                  ) : (
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Receipt photo</span>
+                      <span className="text-right opacity-50">Not needed</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="mt-4 text-[12px] leading-relaxed opacity-55">
+                Watch the status live from your account, or search{" "}
+                <Link href="/track" className="u-link">{order.ref}</Link> any time. If it&apos;s
+                rejected you&apos;ll be able to submit a new receipt.
+              </p>
             </StepPanel>
           )}
         </div>

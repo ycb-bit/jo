@@ -88,6 +88,8 @@ export type Order = {
   /** Legacy orders: storage path of the uploaded receipt. */
   receiptUrl?: string;
   receiptRef?: string; // bank reference typed by customer
+  /** Submitted without a receipt image — the desk verifies from the statement. */
+  receiptMissing?: boolean;
   rejectionReason?: string;
   trackingNote?: string;
   history: { status: OrderStatus; at: number; note?: string }[];

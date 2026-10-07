@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
   if (!["awaiting_payment", "rejected"].includes(order.status)) {
     return errorJson("Order is not awaiting payment", 409);
   }
-  if (!order.receiptData && !order.receiptUrl) return errorJson("Upload a receipt image first");
+
+  // The receipt image is a convenience, not a gate. Jo matches the reference in
+  // the bank statement, and blocking on the upload used to leave the customer
+  // pressing a button that silently did nothing. If there is no image we still
+  // accept the reference and flag the order so the desk knows to look harder.
+  const hasReceiptImage = !!(order.receiptData || order.receiptUrl);
 
   // The customer must tell us which bank they actually paid from, so the
   // admin knows where to look. Default to the method chosen at checkout.
@@ -88,6 +93,8 @@ export async function POST(req: NextRequest) {
       receiptPaymentMethodId: methodId,
       receiptPaymentMethodName: methodName,
       receiptAccountRef: accountRef,
+      // No image attached — the desk has to confirm from the statement alone.
+      receiptMissing: !hasReceiptImage,
       submittedAt: now,
       ...(isResubmission ? { rejectionReason: FieldValue.delete() } : {}),
       history: FieldValue.arrayUnion({
@@ -95,10 +102,16 @@ export async function POST(req: NextRequest) {
         at: now,
         note: `${isResubmission ? "Receipt re-submitted" : "Receipt submitted"} (${receiptRef}${
           methodName ? ` via ${methodName}` : ""
-        })`,
+        })${hasReceiptImage ? "" : " — no receipt image attached"}`,
       }),
       updatedAt: now,
     });
 
-  return json({ ok: true, status: "verifying", receiptRef, paymentMethodName: methodName });
+  return json({
+    ok: true,
+    status: "verifying",
+    receiptRef,
+    paymentMethodName: methodName,
+    receiptMissing: !hasReceiptImage,
+  });
 }
