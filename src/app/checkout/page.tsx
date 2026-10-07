@@ -12,7 +12,7 @@ import { compressImageToDataUri } from "@/lib/image-compress";
 import { track } from "@/lib/analytics";
 import type { Address, PaymentMethod, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { ProductArt } from "@/components/product-art";
+import { CartThumb } from "@/components/cart-thumb";
 import { AddressCard } from "@/components/address-card";
 import { OrderRef } from "@/components/order-ref";
 import { AddressFields } from "@/components/address-fields";
@@ -51,6 +51,7 @@ export default function CheckoutPage() {
   const [uploading, setUploading] = useState(false);
   const [payMethodId, setPayMethodId] = useState<string>("");
   const [submitError, setSubmitError] = useState("");
+  const [copiedAcct, setCopiedAcct] = useState(false);
 
   useEffect(() => {
     return onSnapshot(doc(db, "settings", "store"), (snap) => {
@@ -119,6 +120,18 @@ export default function CheckoutPage() {
     // Step 2 only makes sense once the order exists, so create it here. Doing
     // this the button's job is what made "Pay & prove" render as an empty page.
     await placeOrder();
+  };
+
+  /** Account numbers get mistyped digit-by-digit from a screen — copy beats squinting. */
+  const copyAccountNumber = async () => {
+    if (!method?.accountNumber) return;
+    try {
+      await navigator.clipboard.writeText(method.accountNumber);
+      setCopiedAcct(true);
+      setTimeout(() => setCopiedAcct(false), 2000);
+    } catch {
+      setCopiedAcct(false);
+    }
   };
 
   const placeOrder = async () => {
@@ -389,7 +402,20 @@ export default function CheckoutPage() {
                       <>
                         <p className="flex justify-between"><span className="opacity-60">Bank</span><span>{method.name}</span></p>
                         {method.accountName && <p className="flex justify-between"><span className="opacity-60">Account name</span><span>{method.accountName}</span></p>}
-                        {method.accountNumber && <p className="flex justify-between"><span className="opacity-60">Account number</span><span className="tabular-nums select-all">{method.accountNumber}</span></p>}
+                        {method.accountNumber && (
+                          <p className="flex items-center justify-between gap-3">
+                            <span className="opacity-60">Account number</span>
+                            <span className="flex items-center gap-2">
+                              <span className="tabular-nums select-all">{method.accountNumber}</span>
+                              <button
+                                onClick={copyAccountNumber}
+                                className="border border-line px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] transition-colors hover:border-ink"
+                              >
+                                {copiedAcct ? "Copied ✓" : "Copy"}
+                              </button>
+                            </span>
+                          </p>
+                        )}
                       </>
                     ) : (
                       <p className="flex justify-between"><span className="opacity-60">Payment link</span>
@@ -521,7 +547,7 @@ export default function CheckoutPage() {
               {cart.lines.map((l) => (
                 <li key={`${l.productId}-${l.color}-${l.size}`} className="flex items-center gap-3">
                   <div className="h-16 shrink-0 overflow-hidden bg-bone-dim" style={{ width: 52 }}>
-                    <ProductArt seed={l.slug} className="h-full w-full" />
+                    <CartThumb image={l.image} seed={l.slug} className="h-full w-full object-cover" />
                   </div>
                   <div className="flex-1 text-[13px]">
                     <p className="font-medium">{l.name}</p>

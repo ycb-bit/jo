@@ -24,16 +24,19 @@ export default function Home() {
   const frontY = useTransform(scrollY, [0, 700], [0, -240]); // front type slides up and away
 
   useEffect(() => {
-    // Latest 8 published pieces — the drop, newest first (no more featured flag)
-    const q = query(
-      collection(db, "products"),
-      where("published", "==", true),
-      orderBy("createdAt", "desc"),
-      limit(8)
-    );
+    // Latest 8 published pieces — the drop, newest first (no more featured flag).
+    // Flat auto-indexed shape: `where + orderBy` needs a composite index the
+    // project doesn't have, and that silently emptied this section (same
+    // failure as the shop rack). Newest-first is sorted in JS here.
+    const q = query(collection(db, "products"), where("published", "==", true), limit(60));
     const unsub = onSnapshot(
       q,
-      (snap) => setFeatured(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Product[]),
+      (snap) => {
+        const rows = (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Product[])
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+          .slice(0, 8);
+        setFeatured(rows);
+      },
       () => {}
     );
     return () => unsub();

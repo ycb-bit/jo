@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCart } from "@/lib/store";
-import { ProductArt } from "@/components/product-art";
+import { CartThumb } from "@/components/cart-thumb";
 import { formatMoney } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -59,7 +59,7 @@ export default function CartPage() {
                 className="flex gap-5 py-6"
               >
                 <Link href={`/product/${l.slug}`} className="block h-28 w-24 shrink-0 overflow-hidden bg-bone-dim">
-                  <ProductArt seed={l.slug} className="h-full w-full" />
+                  <CartThumb image={l.image} seed={l.slug} className="h-full w-full object-cover" />
                 </Link>
                 <div className="flex flex-1 flex-col justify-between">
                   <div className="flex items-start justify-between gap-4">

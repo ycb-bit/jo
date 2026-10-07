@@ -56,13 +56,19 @@ export async function GET(req: NextRequest) {
   if (!user) return errorJson("Unauthorized", 401);
   const admin = await getAdminApp();
   const db = getFirestore(admin);
+  // Flat, auto-indexed shape: `where + orderBy` needs a composite index the
+  // project doesn't have, so this exact call 500s today (the admin SDK is
+  // subject to the same index rules). Sort + trim in JS instead.
   const snap = await db
     .collection("orders")
     .where("userId", "==", user.uid)
-    .orderBy("createdAt", "desc")
-    .limit(50)
     .get();
-  return json({ orders: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
+  const orders = snap.docs
+    .map((d) => ({ id: d.id, data: d.data() }))
+    .sort((a, b) => Number(b.data.createdAt || 0) - Number(a.data.createdAt || 0))
+    .slice(0, 50)
+    .map(({ id, data }) => ({ id, ...data }));
+  return json({ orders });
 }
 
 function makeOrderRef() {

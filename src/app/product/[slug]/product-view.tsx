@@ -21,6 +21,8 @@ export default function ProductView({ slug }: { slug: string }) {
   const [size, setSize] = useState("");
   const [imgIdx, setImgIdx] = useState(0);
   const [related, setRelated] = useState<Product[]>([]);
+  /** What was just bagged, shown inline next to the button (a bottom toast is easy to miss). */
+  const [bagged, setBagged] = useState<string | null>(null);
   const cart = useCart();
   const wishlist = useWishlist();
   const { toast } = useToast();
@@ -92,6 +94,8 @@ export default function ProductView({ slug }: { slug: string }) {
     });
     track("add_to_cart", { ref: product.id, name: product.name, value: variantPrice(product, color, size), qty: 1 });
     toast(`${product.name} — ${color}/${size} added to your bag`);
+    setBagged(`${product.name} — ${color}/${size}`);
+    setTimeout(() => setBagged(null), 6000);
   };
 
   const hasPhotos = (product.images?.length || 0) > 0;
@@ -243,6 +247,18 @@ export default function ProductView({ slug }: { slug: string }) {
                   {stock === 0 ? "Sold out" : "Add to bag"}
                 </button>
               </Magnetic>
+              {bagged && (
+                <div className="mt-4 border border-ink bg-bone-dim/60 p-4 text-[13px]">
+                  <p>
+                    <span className="mr-2" aria-hidden>✓</span>
+                    <strong>{bagged.split(" — ")[0]}</strong> is in your bag ({bagged.split(" — ")[1]}).
+                  </p>
+                  <div className="mt-2 flex gap-5 text-[11px] uppercase tracking-[0.16em]">
+                    <Link href="/cart" className="u-link text-ember">View bag →</Link>
+                    <Link href="/checkout" className="u-link">Checkout now →</Link>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => {
                   wishlist.toggle(product.id);

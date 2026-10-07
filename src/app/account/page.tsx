@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/store";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, limit, doc, updateDoc } from "firebase/firestore";
 import { formatMoney, timeAgo, cn } from "@/lib/utils";
 import { ORDER_STATUS_LABEL, type Order, type Address } from "@/lib/types";
 import {
@@ -23,6 +23,7 @@ export default function AccountPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [tab, setTab] = useState<"orders" | "addresses">("orders");
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   // Address book editor state. The list itself lives in Firestore (profile).
   const [draft, setDraft] = useState<Address>(EMPTY_ADDRESS);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -35,8 +36,25 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (!fbUser) return;
-    const q = query(collection(db, "orders"), where("userId", "==", fbUser.uid), orderBy("createdAt", "desc"));
-    return onSnapshot(q, (snap) => setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Order[]), () => setOrders([]));
+    // One flat, auto-indexed query. Firestore refuses `where + orderBy` on
+    // different fields without a composite index, and the swallowed error
+    // made a full order history read as "No orders yet" forever — the same
+    // failure the shop rack had. Newest-first is done here in JS instead.
+    const q = query(collection(db, "orders"), where("userId", "==", fbUser.uid), limit(100));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Order[];
+        rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setOrders(rows);
+        setOrdersError(null);
+      },
+      (err) => {
+        // Never blank the page silently again — the message names the problem.
+        setOrdersError(err.message || "Could not load your orders");
+        setOrders([]);
+      }
+    );
   }, [fbUser]);
 
   if (loading || !profile) {
@@ -132,7 +150,13 @@ export default function AccountPage() {
 
       {tab === "orders" && (
         <div className="mt-8">
-          {orders === null ? (
+          {ordersError ? (
+            <div className="border border-ember p-14 text-center">
+              <p className="font-display text-2xl uppercase">Orders unavailable</p>
+              <p className="mt-2 text-[13px] opacity-70">{ordersError}</p>
+              <button onClick={() => router.refresh()} className="u-link mt-5 text-[12px] uppercase tracking-[0.2em]">Try again →</button>
+            </div>
+          ) : orders === null ? (
             <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-20 w-full" />)}</div>
           ) : orders.length === 0 ? (
             <div className="border border-line p-14 text-center">
