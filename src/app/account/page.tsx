@@ -145,9 +145,16 @@ export default function AccountPage() {
               {orders.map((o) => (
                 <li key={o.id}>
                   <Link href={`/order/${o.id}`} className="flex flex-wrap items-center justify-between gap-3 py-5 transition-colors hover:bg-bone-dim/40">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium">{o.ref || o.id.slice(0, 10)}</p>
-                      <p className="text-[12px] opacity-50">
+                      {/* What was actually ordered, named — "3 items · ETB…" alone
+                          means opening every order to find the one being asked
+                          about. First three pieces, then the overflow count. */}
+                      <p className="mt-0.5 text-[12px] opacity-60">
+                        {(o.items || []).slice(0, 3).map((it) => `${it.name} ×${it.qty}`).join(" · ")}
+                        {o.items.length > 3 && ` · +${o.items.length - 3} more`}
+                      </p>
+                      <p className="text-[11px] opacity-50 tabular-nums">
                         {timeAgo(o.createdAt)} · {o.items.length} item{o.items.length === 1 ? "" : "s"} · {formatMoney(o.total, o.currency)}
                       </p>
                     </div>
