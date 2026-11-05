@@ -181,41 +181,33 @@ export default function CheckoutPage() {
     }
   };
 
-  const uploadReceipt = async () => {
-    if (!file || !order) return;
-    setUploading(true);
-    try {
-      // Compress in the browser → data URI straight into the order doc. No bucket.
-      const dataUri = await compressImageToDataUri(file, 1400, 0.72);
-      const token = await fbUser!.getIdToken();
-      const res = await fetch("/api/orders/receipt/upload", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ orderId: order.id, dataUri, name: file.name }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || "Receipt upload failed");
-      }
-      setStep(3);
-      window.scrollTo({ top: 0 });
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Upload failed", "err");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const submitForVerification = async () => {
+  /**
+   * One action: compress the photo, attach it to the order, then submit it for
+   * verification. The image is the verification now — the reference number is
+   * only extra evidence, so nothing here depends on it.
+   */
+  const uploadAndSubmit = async () => {
     setSubmitError("");
-    if (!order || receiptRef.trim().length < 3) {
-      setSubmitError("Type the reference your bank or telebirr app gave you.");
-      toast("Type the bank reference from your transfer", "err");
+    if (!order) return;
+    if (!file) {
+      setSubmitError("Choose a screenshot or photo of your receipt first.");
+      toast("Add your receipt image first", "err");
       return;
     }
     setUploading(true);
     try {
+      const dataUri = await compressImageToDataUri(file, 1400, 0.72);
       const token = await fbUser!.getIdToken();
+      const up = await fetch("/api/orders/receipt/upload", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ orderId: order.id, dataUri, name: file.name }),
+      });
+      if (!up.ok) {
+        const d = await up.json().catch(() => ({}));
+        throw new Error(d.error || "Receipt upload failed");
+      }
+
       const res = await fetch("/api/orders/receipt/submit", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -225,20 +217,23 @@ export default function CheckoutPage() {
           paymentMethodId: method?.id || "",
         }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Submit failed");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // The photo is already saved, so the order is not stuck — finish from
+        // the order page instead of making them upload it again.
+        setSubmitError(d.error || "Receipt saved, but submitting failed — open the order to retry.");
+        toast("Receipt saved — open the order to finish", "err");
+        router.push(`/order/${order.id}`);
+        return;
+      }
       cart.clear();
-      track("receipt_submitted", { ref: order.id, name: receiptRef.trim() });
-      toast(
-        d.receiptMissing
-          ? "Submitted — Jo will match the reference in the statement"
-          : "Receipt submitted — Jo will verify it shortly"
-      );
+      track("receipt_submitted", { ref: order.id, name: file.name });
+      toast("Receipt submitted — Jo will check it");
       router.push(`/order/${order.id}`);
     } catch (err) {
       // Keep the message on the page too: a toast alone disappears before it is read.
-      setSubmitError(err instanceof Error ? err.message : "Submit failed");
-      toast(err instanceof Error ? err.message : "Submit failed", "err");
+      setSubmitError(err instanceof Error ? err.message : "Upload failed");
+      toast(err instanceof Error ? err.message : "Upload failed", "err");
     } finally {
       setUploading(false);
     }
@@ -435,9 +430,23 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div className="mt-6 max-w-md">
-                <label className="text-[11px] uppercase tracking-[0.2em] opacity-60">
-                  {method?.type === "bank" ? `${method.name} transfer reference` : "Payment reference"}
+              {/* The receipt photo is the verification — this is the one
+                  required step. The bank reference is optional extra evidence. */}
+              <div className="mt-8 max-w-md">
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">
+                  Upload your receipt
+                </p>
+                <label className="mt-3 flex cursor-pointer flex-col items-center justify-center border border-dashed border-ink/30 p-8 text-center transition-colors hover:border-ink">
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  {file ? (
+                    <span className="text-[13px]"><strong>{file.name}</strong> — {Math.round(file.size / 1024)} KB ✓</span>
+                  ) : (
+                    <span className="text-[13px] opacity-60">Choose a screenshot or photo of the transfer — JPG, PNG or HEIC</span>
+                  )}
+                </label>
+
+                <label className="mt-5 block text-[11px] uppercase tracking-[0.2em] opacity-60">
+                  Reference number <span className="normal-case tracking-normal">(optional)</span>
                 </label>
                 <input
                   className="input mt-2"
@@ -447,43 +456,20 @@ export default function CheckoutPage() {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <p className="mt-2 text-[12px] leading-relaxed opacity-55">
-                  {method?.type === "bank"
-                    ? "The code your bank or telebirr app generated after the transfer."
-                    : "The code your payment confirmation shows."}
-                </p>
-              </div>
 
-              {/* Optional, deliberately IS quiet: most customers just type the
-                  reference. The photo only helps when the statement match is
-                  near-absent, e.g. it failed once. */}
-              <details className="mt-5 max-w-md text-[13px]">
-                <summary className="cursor-pointer select-none text-[12px] opacity-50 transition-opacity hover:opacity-80">
-                  {file ? `Receipt photo attached — ${Math.round(file.size / 1024)} KB` : "Add a receipt photo (optional)"}
-                </summary>
-                <label className="mt-3 flex cursor-pointer items-center justify-center border border-dashed border-line p-6 text-center transition-colors hover:border-ink">
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                  <span className="text-[12px] opacity-60">{file ? "Choose a different file — JPG, PNG or HEIC" : "Click to choose — JPG, PNG or HEIC"}</span>
-                </label>
-                {file && (
-                  <button onClick={uploadReceipt} disabled={uploading} className="u-link mt-3 text-[11px] uppercase tracking-[0.18em] text-ember">
-                    {uploading ? "Uploading…" : "Attach it to this order →"}
-                  </button>
+                <button
+                  onClick={uploadAndSubmit}
+                  disabled={uploading || !file}
+                  className="mt-6 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {uploading ? "Uploading your receipt…" : "Upload receipt & finish →"}
+                </button>
+                {submitError && (
+                  <p className="mt-4 border border-ember p-4 text-[13px] leading-relaxed text-ember">
+                    {submitError}
+                  </p>
                 )}
-              </details>
-
-              <button
-                onClick={submitForVerification}
-                disabled={uploading || receiptRef.trim().length < 3}
-                className="mt-8 w-full max-w-md border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {uploading ? "Submitting…" : "Submit & finish →"}
-              </button>
-              {submitError && (
-                <p className="mt-4 max-w-md border border-ember p-4 text-[13px] leading-relaxed text-ember">
-                  {submitError}
-                </p>
-              )}
+              </div>
             </StepPanel>
           )}
 
@@ -501,9 +487,15 @@ export default function CheckoutPage() {
                 <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">What Jo is matching</p>
                 <div className="mt-2 space-y-1.5">
                   <p className="flex justify-between gap-4">
-                    <span className="opacity-60">Transfer</span>
-                    <span className="text-right font-medium">{receiptRef.trim()}</span>
+                    <span className="opacity-60">Receipt</span>
+                    <span className="text-right font-medium">Image attached ✓</span>
                   </p>
+                  {receiptRef.trim() && (
+                    <p className="flex justify-between gap-4">
+                      <span className="opacity-60">Reference</span>
+                      <span className="text-right tabular-nums">{receiptRef.trim()}</span>
+                    </p>
+                  )}
                   {method && (
                     <p className="flex justify-between gap-4">
                       <span className="opacity-60">Method</span>

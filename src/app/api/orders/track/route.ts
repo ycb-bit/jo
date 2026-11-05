@@ -60,7 +60,15 @@ export async function POST(req: NextRequest) {
       note: h.note,
     })),
     trackingNote: order.trackingNote || "",
-    receiptSubmitted: !!order.receiptRef,
+    // The reference is optional now, so count an attached receipt image and the
+    // post-upload states too — otherwise an image-only submission reads as
+    // "re send your receipt".
+    receiptSubmitted: !!(
+      order.receiptRef ||
+      order.receiptData ||
+      order.receiptUrl ||
+      ["verifying", "receipt_uploaded"].includes(order.status)
+    ),
     rejectionReason: order.rejectionReason || "",
   });
 }

@@ -539,7 +539,7 @@ export default function AdminProducts() {
         </div>
       )}
 
-      {/* Delete confirmation — type the product name to confirm */}
+      {/* Delete confirmation — details first, then a plain confirm button. */}
       <ConfirmDialog
         open={!!pendingDelete}
         title="Delete this product?"
@@ -551,7 +551,6 @@ export default function AdminProducts() {
             </>
           ) : null
         }
-        confirmWord={pendingDelete?.name}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && remove(pendingDelete)}
         busy={busy}

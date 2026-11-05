@@ -23,11 +23,11 @@ export async function POST(req: NextRequest) {
   const { orderId } = body || {};
   const rawRef = body?.receiptRef;
 
-  if (!orderId || typeof rawRef !== "string" || rawRef.trim().length < 3) {
-    return errorJson("Enter the transfer reference from your receipt");
-  }
-  const receiptRef = normalizeRef(rawRef);
-  if (receiptRef.length < 3) return errorJson("Enter the transfer reference from your receipt");
+  if (!orderId) return errorJson("Missing order");
+
+  // Verification is image-first now: the receipt photo is what Jo checks, and
+  // the bank reference is optional extra evidence when the customer has it.
+  const receiptRef = typeof rawRef === "string" && rawRef.trim() ? normalizeRef(rawRef) : "";
 
   const admin = await getAdminApp();
   const db = getFirestore(admin);
@@ -35,15 +35,17 @@ export async function POST(req: NextRequest) {
   if (!orderDoc.exists) return errorJson("Order not found", 404);
   const order = orderDoc.data()!;
   if (order.userId !== user.uid && !user.admin) return errorJson("Forbidden", 403);
-  if (!["awaiting_payment", "rejected"].includes(order.status)) {
+  // `receipt_uploaded` must be allowed: attaching the image and submitting the
+  // receipt are two calls now, and the image always lands first. Without it the
+  // image-first flow died on a 409 right after a successful upload.
+  if (!["awaiting_payment", "receipt_uploaded", "rejected"].includes(order.status)) {
     return errorJson("Order is not awaiting payment", 409);
   }
 
-  // The receipt image is a convenience, not a gate. Jo matches the reference in
-  // the bank statement, and blocking on the upload used to leave the customer
-  // pressing a button that silently did nothing. If there is no image we still
-  // accept the reference and flag the order so the desk knows to look harder.
-  const hasReceiptImage = !!(order.receiptData || order.receiptUrl);
+  // The image IS the verification now — no photo, nothing for Jo to check.
+  if (!order.receiptData && !order.receiptUrl) {
+    return errorJson("Upload the receipt image first");
+  }
 
   // The customer must tell us which bank they actually paid from, so the
   // admin knows where to look. Default to the method chosen at checkout.
@@ -71,12 +73,6 @@ export async function POST(req: NextRequest) {
     methodName = method.name;
     accountRef = method.accountNumber || "";
 
-    // A reference only means something for an actual bank transfer. Payment
-    // links (Telebirr checkout, etc.) are confirmed by the provider, so we
-    // do not demand a transfer reference for them.
-    if (method.type === "bank" && !order.receiptRef) {
-      // required — enforced above by the length check
-    }
   }
 
   const now = Date.now();
@@ -93,16 +89,16 @@ export async function POST(req: NextRequest) {
       receiptPaymentMethodId: methodId,
       receiptPaymentMethodName: methodName,
       receiptAccountRef: accountRef,
-      // No image attached — the desk has to confirm from the statement alone.
-      receiptMissing: !hasReceiptImage,
+      // Kept for legacy orders; an image is now mandatory to get here.
+      receiptMissing: false,
       submittedAt: now,
       ...(isResubmission ? { rejectionReason: FieldValue.delete() } : {}),
       history: FieldValue.arrayUnion({
         status: "verifying",
         at: now,
-        note: `${isResubmission ? "Receipt re-submitted" : "Receipt submitted"} (${receiptRef}${
+        note: `${isResubmission ? "Receipt re-submitted" : "Receipt submitted"}${
           methodName ? ` via ${methodName}` : ""
-        })${hasReceiptImage ? "" : " — no receipt image attached"}`,
+        }${receiptRef ? ` — ref ${receiptRef}` : ""}`,
       }),
       updatedAt: now,
     });
@@ -112,6 +108,6 @@ export async function POST(req: NextRequest) {
     status: "verifying",
     receiptRef,
     paymentMethodName: methodName,
-    receiptMissing: !hasReceiptImage,
+    receiptMissing: false,
   });
 }

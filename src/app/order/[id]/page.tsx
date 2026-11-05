@@ -44,7 +44,10 @@ export default function OrderPage() {
 
   const flowIdx = ORDER_STATUS_FLOW.indexOf(order.status);
   const terminal = ["rejected", "cancelled"].includes(order.status);
-  const canPay = ["awaiting_payment", "rejected"].includes(order.status);
+  // `receipt_uploaded` belongs here: the image may be attached but not yet
+  // submitted (or the submit may have failed), and there must still be a way
+  // to finish from this page.
+  const canPay = ["awaiting_payment", "receipt_uploaded", "rejected"].includes(order.status);
 
   const upload = async () => {
     if (!file || !fbUser) return;
@@ -69,8 +72,10 @@ export default function OrderPage() {
   };
 
   const submit = async () => {
-    if (!fbUser || receiptRef.trim().length < 3) {
-      toast("Type the bank reference from your transfer", "err");
+    if (!fbUser) return;
+    // Image-first: the photo is what Jo verifies; the reference is optional.
+    if (!order.receiptData && !order.receiptUrl) {
+      toast("Add your receipt image first", "err");
       return;
     }
     setBusy(true);
@@ -82,7 +87,7 @@ export default function OrderPage() {
         body: JSON.stringify({ orderId: order.id, receiptRef: receiptRef.trim() }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Submit failed");
-      toast("Submitted — hang tight for verification");
+      toast("Receipt submitted — hang tight for verification");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Submit failed", "err");
     } finally {
@@ -173,7 +178,7 @@ export default function OrderPage() {
                 reference <strong>{order.ref}</strong>, then attach your receipt here.
               </p>
               <label className="mt-4 flex cursor-pointer items-center justify-between border border-line px-4 py-3 text-[13px] transition-colors hover:border-ink">
-                <span>{file ? `${file.name} ✓` : "Choose receipt image"}</span>
+                <span>{file ? `${file.name} ✓` : order.receiptData || order.receiptUrl ? "Receipt attached ✓ — replace it" : "Choose receipt image"}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 <span className="opacity-50">Browse</span>
               </label>
@@ -184,15 +189,19 @@ export default function OrderPage() {
               </div>
               <input
                 className="input mt-4"
-                placeholder="Bank transfer reference (e.g. TRF-884102)"
+                placeholder="Bank reference (optional)"
                 value={receiptRef}
                 onChange={(e) => setReceiptRef(e.target.value)}
               />
-              <button onClick={submit} disabled={busy} className="mt-3 w-full border border-line py-3 text-[11px] uppercase tracking-[0.2em] hover:border-ink disabled:opacity-40">
-                Submit for verification
+              <button
+                onClick={submit}
+                disabled={busy || (!order.receiptData && !order.receiptUrl)}
+                className="mt-3 w-full border border-line py-3 text-[11px] uppercase tracking-[0.2em] hover:border-ink disabled:opacity-40"
+              >
+                {(order.receiptData || order.receiptUrl) ? "Submit receipt for verification" : "Upload the image, then submit"}
               </button>
               <p className="mt-3 text-[12px] leading-relaxed opacity-55">
-                No receipt image? Just type the reference — Jo matches it in the bank statement.
+                The receipt photo is what Jo checks — the reference number is optional.
               </p>
             </div>
           )}
