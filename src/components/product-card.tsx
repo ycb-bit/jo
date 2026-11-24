@@ -8,9 +8,11 @@ import { ProductImage, imageAt, cardImageSizes } from "./product-image";
 import { useWishlist } from "@/lib/store";
 import { formatMoney, totalStock } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
   const wishlist = useWishlist();
+  const { t } = useT();
   const [hover, setHover] = useState(false);
   const stock = totalStock(product.stock || {});
   const saved = wishlist.productIds.includes(product.id);
@@ -70,12 +72,13 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
 
           {stock === 0 && (
             <span className="absolute left-3 top-3 bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-bone">
-              Sold out
+              {t("card.soldOut")}
             </span>
           )}
-          {stock > 0 && stock <= 4 && (
+          {/* Low stock always names the number left, never just "low stock". */}
+          {stock > 0 && stock <= 5 && (
             <span className="absolute left-3 top-3 bg-ember px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-bone">
-              {stock} left
+              {t("card.left", { n: stock })}
             </span>
           )}
           <button

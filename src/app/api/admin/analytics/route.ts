@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
       return { id: d.id, name: data.name || "Unnamed", slug: data.slug, published: data.published, total };
     })
     .filter((p) => p.published !== false)
-    .filter((p) => p.total <= 4)
+    .filter((p) => p.total <= 5)
     .sort((a, b) => a.total - b.total)
     .slice(0, 10)
     .map((p) => ({ ...p, sold: soldById.get(p.id) || 0 }));

@@ -20,6 +20,8 @@ import {
   EMPTY_ADDRESS, missingAddressFields, normalizeAddresses, withAddress,
 } from "@/lib/addresses";
 import { FadeIn as StepPanel } from "@/components/fade-in";
+import { BackButton } from "@/components/back-button";
+import { useT } from "@/lib/i18n";
 
 const FALLBACK_SETTINGS: StoreSettings = {
   currency: "ETB",
@@ -34,6 +36,7 @@ export default function CheckoutPage() {
   const cart = useCart();
   const { toast } = useToast();
   const router = useRouter();
+  const { t } = useT();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [settings, setSettings] = useState<StoreSettings>(FALLBACK_SETTINGS);
@@ -103,7 +106,7 @@ export default function CheckoutPage() {
 
   const continueToPayment = async () => {
     if (missing.length) {
-      toast(`Still needed: ${missing.join(", ")}`, "err");
+      toast(t("co.stillNeeded", { fields: missing.map((f) => t(`address.${f}`)).join(", ") }), "err");
       return;
     }
     // A brand-new address can be kept for next time.
@@ -112,9 +115,9 @@ export default function CheckoutPage() {
         await updateDoc(doc(db, "users", fbUser!.uid), {
           addresses: withAddress(book, { ...address, label: address.label || "New address", isDefault: book.length === 0 }, { makeDefault: book.length === 0 }),
         });
-        toast("Address saved to your account");
+        toast(t("toast.addressSavedToAccount"));
       } catch {
-        toast("Order continues — but we could not save that address", "err");
+        toast(t("toast.addressUnsaved"), "err");
       }
     }
     // Step 2 only makes sense once the order exists, so create it here. Doing
@@ -136,7 +139,7 @@ export default function CheckoutPage() {
 
   const placeOrder = async () => {
     if (missing.length) {
-      toast(`Still needed: ${missing.join(", ")}`, "err");
+      toast(t("co.stillNeeded", { fields: missing.map((f) => t(`address.${f}`)).join(", ") }), "err");
       return;
     }
     setPlacing(true);
@@ -151,7 +154,7 @@ export default function CheckoutPage() {
         city: address.city,
         subCity: address.subCity || "",
         postalCode: address.postalCode || "",
-        country: address.country || "Ethiopia",
+        country: address.country,
         phone: address.phone,
       };
       const res = await fetch("/api/orders", {
@@ -175,7 +178,7 @@ export default function CheckoutPage() {
       setStep(2);
       window.scrollTo({ top: 0 });
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Order failed", "err");
+      toast(err instanceof Error ? err.message : t("toast.orderFailed"), "err");
     } finally {
       setPlacing(false);
     }
@@ -190,8 +193,8 @@ export default function CheckoutPage() {
     setSubmitError("");
     if (!order) return;
     if (!file) {
-      setSubmitError("Choose a screenshot or photo of your receipt first.");
-      toast("Add your receipt image first", "err");
+      setSubmitError(t("toast.pickReceipt"));
+      toast(t("toast.addReceiptFirst"), "err");
       return;
     }
     setUploading(true);
@@ -221,19 +224,19 @@ export default function CheckoutPage() {
       if (!res.ok) {
         // The photo is already saved, so the order is not stuck — finish from
         // the order page instead of making them upload it again.
-        setSubmitError(d.error || "Receipt saved, but submitting failed — open the order to retry.");
-        toast("Receipt saved — open the order to finish", "err");
+        setSubmitError(d.error || t("co.receiptSavedFailed"));
+        toast(t("toast.receiptSavedOpen"), "err");
         router.push(`/order/${order.id}`);
         return;
       }
       cart.clear();
       track("receipt_submitted", { ref: order.id, name: file.name });
-      toast("Receipt submitted — Jo will check it");
+      toast(t("toast.receiptSubmittedJo"));
       router.push(`/order/${order.id}`);
     } catch (err) {
       // Keep the message on the page too: a toast alone disappears before it is read.
-      setSubmitError(err instanceof Error ? err.message : "Upload failed");
-      toast(err instanceof Error ? err.message : "Upload failed", "err");
+      setSubmitError(err instanceof Error ? err.message : t("toast.uploadFailed"));
+      toast(err instanceof Error ? err.message : t("toast.uploadFailed"), "err");
     } finally {
       setUploading(false);
     }
@@ -247,17 +250,19 @@ export default function CheckoutPage() {
   if (cart.lines.length === 0 && !order) {
     return (
       <div className="mx-auto max-w-[1440px] px-5 py-32 text-center md:px-10">
-        <h1 className="font-display text-5xl uppercase">Nothing to check out</h1>
-        <Link href="/shop" className="u-link mt-6 inline-block text-[12px] uppercase tracking-[0.2em]">← Back to the rack</Link>
+        <BackButton />
+        <h1 className="font-display text-5xl uppercase">{t("co.nothingTitle")}</h1>
+        <Link href="/shop" className="u-link mt-6 inline-block text-[12px] uppercase tracking-[0.2em]">{t("product.backToRack")}</Link>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-[1440px] px-5 pb-28 pt-14 md:px-10">
+      <BackButton />
       {/* Stepper */}
       <div className="mb-10 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em]">
-        {["Details", "Pay & prove", "Done"].map((label, i) => (
+        {[t("co.step1"), t("co.step2"), t("co.step3")].map((label, i) => (
           <div key={label} className="flex items-center gap-3">
             <span className={cn("flex h-7 w-7 items-center justify-center border", step > i ? "border-ink bg-ink text-bone" : "border-line opacity-50")}>
               {i + 1}
@@ -274,11 +279,11 @@ export default function CheckoutPage() {
               blank left column can never happen. */}
           {(step === 1 || !order) && (
             <StepPanel animate={false}>
-              <h1 className="font-display text-4xl uppercase md:text-5xl">Where it&apos;s going</h1>
+              <h1 className="font-display text-4xl uppercase md:text-5xl">{t("co.whereGoing")}</h1>
 
               {book.length > 0 && !usingNew && (
                 <div className="mt-8">
-                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Ship to</p>
+                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("co.shipTo")}</p>
                   <ul className="mt-3 grid gap-4 sm:grid-cols-2">
                     {book.map((a) => (
                       <li key={a.id}>
@@ -291,7 +296,7 @@ export default function CheckoutPage() {
                     ))}
                   </ul>
                   <button onClick={editPicked} className="u-link mt-5 text-[12px] uppercase tracking-[0.2em] text-ember">
-                    {picked ? "Edit this address" : "+ Use a different address"}
+                    {picked ? t("co.editAddress") : t("co.useDifferent")}
                   </button>
                 </div>
               )}
@@ -300,7 +305,7 @@ export default function CheckoutPage() {
                 <div className="mt-8">
                   {book.length > 0 && (
                     <button onClick={backToBook} className="u-link mb-5 text-[11px] uppercase tracking-[0.18em] text-ember">
-                      ← Back to saved addresses
+                      {t("co.backToSaved")}
                     </button>
                   )}
                   <AddressFields address={draft} onChange={setDraft} showLabel={book.length > 0} />
@@ -314,7 +319,7 @@ export default function CheckoutPage() {
                         className="h-4 w-4 shrink-0 accent-ember"
                       />
                       <span>
-                        Save this address to my account — next time checkout is one tap.
+                        {t("co.saveAddress")}
                       </span>
                     </label>
                   )}
@@ -323,7 +328,7 @@ export default function CheckoutPage() {
 
               {missing.length > 0 && (
                 <p className="mt-5 text-[12px] text-ember">
-                  Still needed: {missing.join(", ")}
+                  {t("co.stillNeeded", { fields: missing.join(", ") })}
                 </p>
               )}
 
@@ -332,10 +337,10 @@ export default function CheckoutPage() {
                 disabled={missing.length > 0 || placing}
                 className="mt-8 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {placing ? "Placing your order…" : "Continue to payment →"}
+                {placing ? t("co.placing") : t("co.continue")}
               </button>
               <p className="mt-3 text-center text-[11px] uppercase tracking-[0.16em] opacity-50">
-                Nothing is charged here — you pay by bank transfer on the next step
+                {t("co.noCharge")}
               </p>
             </StepPanel>
           )}
@@ -343,11 +348,8 @@ export default function CheckoutPage() {
           {/* STEP 2 — Payment instructions */}
           {step === 2 && order && (
             <StepPanel animate={false}>
-              <h1 className="font-display text-4xl uppercase md:text-5xl">Pay it</h1>
-              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
-                Order reserved. Pick how you&apos;re paying, send the exact amount, then upload
-                your receipt so Jo can verify it.
-              </p>
+              <h1 className="font-display text-4xl uppercase md:text-5xl">{t("co.payTitle")}</h1>
+              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">{t("co.payBody")}</p>
 
               <OrderRef value={order.ref} className="mt-8" />
 
@@ -355,7 +357,7 @@ export default function CheckoutPage() {
                   receipt photo is optional and intentionally quiet, secondary
                   to the core product. */}
               <div className="mt-8 max-w-md">
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Shipping to</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("co.shippingTo")}</p>
                 <div className="mt-3">
                   <AddressCard address={shipTo} />
                 </div>
@@ -364,7 +366,7 @@ export default function CheckoutPage() {
               {/* Payment method picker */}
               {methods.length > 0 && (
                 <div className="mt-8">
-                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Payment method</p>
+                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("co.paymentMethod")}</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {methods.map((m) => (
                       <button
@@ -378,7 +380,7 @@ export default function CheckoutPage() {
                       >
                         <span className="font-medium">{m.name}</span>
                         <span className={cn("block text-[11px] uppercase tracking-[0.14em] mt-1", method?.id === m.id ? "opacity-70" : "opacity-50")}>
-                          {m.type === "bank" ? "Bank transfer" : "Payment link"}
+                          {m.type === "bank" ? t("co.bankTransfer") : t("co.paymentLink")}
                         </span>
                       </button>
                     ))}
@@ -388,44 +390,43 @@ export default function CheckoutPage() {
 
               <div className="mt-8 border border-ink p-6 md:p-8">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Amount to send</p>
+                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("co.amountToSend")}</p>
                   <p className="font-display text-4xl tabular-nums">{formatMoney(order.total, settings.currency)}</p>
                 </div>
                 {method ? (
                   <div className="mt-5 space-y-2 border-t border-line pt-5 text-[13px]">
                     {method.type === "bank" ? (
                       <>
-                        <p className="flex justify-between"><span className="opacity-60">Bank</span><span>{method.name}</span></p>
-                        {method.accountName && <p className="flex justify-between"><span className="opacity-60">Account name</span><span>{method.accountName}</span></p>}
+                        <p className="flex justify-between"><span className="opacity-60">{t("co.bank")}</span><span>{method.name}</span></p>
+                        {method.accountName && <p className="flex justify-between"><span className="opacity-60">{t("co.accountName")}</span><span>{method.accountName}</span></p>}
                         {method.accountNumber && (
                           <p className="flex items-center justify-between gap-3">
-                            <span className="opacity-60">Account number</span>
+                            <span className="opacity-60">{t("co.accountNumber")}</span>
                             <span className="flex items-center gap-2">
                               <span className="tabular-nums select-all">{method.accountNumber}</span>
                               <button
                                 onClick={copyAccountNumber}
                                 className="border border-line px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] transition-colors hover:border-ink"
                               >
-                                {copiedAcct ? "Copied ✓" : "Copy"}
+                                {copiedAcct ? t("co.copied") : t("co.copy")}
                               </button>
                             </span>
                           </p>
                         )}
                       </>
                     ) : (
-                      <p className="flex justify-between"><span className="opacity-60">Payment link</span>
+                      <p className="flex justify-between"><span className="opacity-60">{t("co.paymentLink")}</span>
                         <a href={method.url} target="_blank" rel="noreferrer" className="u-link font-medium text-ember">
-                          Open {method.name} ↗
+                          {t("co.openLink", { name: method.name })}
                         </a>
                       </p>
                     )}
                     {method.instructions && <p className="border-t border-line pt-3 leading-relaxed opacity-70">{method.instructions}</p>}
-                    <p className="flex justify-between"><span className="opacity-60">Payment reference</span><span className="font-medium">{order.ref}</span></p>
+                    <p className="flex justify-between"><span className="opacity-60">{t("co.paymentReference")}</span><span className="font-medium">{order.ref}</span></p>
                   </div>
                 ) : (
                   <p className="mt-5 border-t border-line pt-5 text-[13px] leading-relaxed opacity-70">
-                    Payment details are being set up — you can still place the order and pay
-                    later from your account page, or reach Jo directly.
+                    {t("co.noMethodNote")}
                   </p>
                 )}
               </div>
@@ -434,19 +435,19 @@ export default function CheckoutPage() {
                   required step. The bank reference is optional extra evidence. */}
               <div className="mt-8 max-w-md">
                 <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">
-                  Upload your receipt
+                  {t("co.uploadReceipt")}
                 </p>
                 <label className="mt-3 flex cursor-pointer flex-col items-center justify-center border border-dashed border-ink/30 p-8 text-center transition-colors hover:border-ink">
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                   {file ? (
                     <span className="text-[13px]"><strong>{file.name}</strong> — {Math.round(file.size / 1024)} KB ✓</span>
                   ) : (
-                    <span className="text-[13px] opacity-60">Choose a screenshot or photo of the transfer — JPG, PNG or HEIC</span>
+                    <span className="text-[13px] opacity-60">{t("co.chooseFile")}</span>
                   )}
                 </label>
 
                 <label className="mt-5 block text-[11px] uppercase tracking-[0.2em] opacity-60">
-                  Reference number <span className="normal-case tracking-normal">(optional)</span>
+                  {t("co.reference")} <span className="normal-case tracking-normal">{t("co.optional")}</span>
                 </label>
                 <input
                   className="input mt-2"
@@ -462,7 +463,7 @@ export default function CheckoutPage() {
                   disabled={uploading || !file}
                   className="mt-6 w-full border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {uploading ? "Uploading your receipt…" : "Upload receipt & finish →"}
+                  {uploading ? t("co.uploading") : t("co.uploadFinish")}
                 </button>
                 {submitError && (
                   <p className="mt-4 border border-ember p-4 text-[13px] leading-relaxed text-ember">
@@ -476,56 +477,52 @@ export default function CheckoutPage() {
           {/* STEP 3 — Done: order received, payment being matched */}
           {step === 3 && order && (
             <StepPanel animate={false}>
-              <h1 className="font-display text-4xl uppercase md:text-5xl">Done</h1>
-              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
-                Order received. Jo matches your transfer in the account, usually within a few
-                hours, and you&apos;ll see the status move live.
-              </p>
+              <h1 className="font-display text-4xl uppercase md:text-5xl">{t("co.step3")}</h1>
+              <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">{t("co.doneBody")}</p>
 
               {/* What Jo is matching, so &quot;which transfer?&quot; never comes up. */}
               <div className="mt-6 max-w-md border border-line p-5 text-[13px]">
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">What Jo is matching</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("co.matching")}</p>
                 <div className="mt-2 space-y-1.5">
                   <p className="flex justify-between gap-4">
-                    <span className="opacity-60">Receipt</span>
-                    <span className="text-right font-medium">Image attached ✓</span>
+                    <span className="opacity-60">{t("co.receipt")}</span>
+                    <span className="text-right font-medium">{t("co.imageAttached")}</span>
                   </p>
                   {receiptRef.trim() && (
                     <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Reference</span>
+                      <span className="opacity-60">{t("co.referenceLabel")}</span>
                       <span className="text-right tabular-nums">{receiptRef.trim()}</span>
                     </p>
                   )}
                   {method && (
                     <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Method</span>
+                      <span className="opacity-60">{t("co.method")}</span>
                       <span className="text-right">{method.name}</span>
                     </p>
                   )}
                   {method?.type === "bank" && method.accountNumber && (
                     <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Account</span>
+                      <span className="opacity-60">{t("co.account")}</span>
                       <span className="tabular-nums select-all">{method.accountNumber}</span>
                     </p>
                   )}
                   {file ? (
                     <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Receipt photo</span>
-                      <span className="text-right">Attached ✓</span>
+                      <span className="opacity-60">{t("co.receiptPhoto")}</span>
+                      <span className="text-right">{t("co.attached")}</span>
                     </p>
                   ) : (
                     <p className="flex justify-between gap-4">
-                      <span className="opacity-60">Receipt photo</span>
-                      <span className="text-right opacity-50">Not needed</span>
+                      <span className="opacity-60">{t("co.receiptPhoto")}</span>
+                      <span className="text-right opacity-50">{t("co.notNeeded")}</span>
                     </p>
                   )}
                 </div>
               </div>
 
               <p className="mt-4 text-[12px] leading-relaxed opacity-55">
-                Watch the status live from your account, or search{" "}
-                <Link href="/track" className="u-link">{order.ref}</Link> any time. If it&apos;s
-                rejected you&apos;ll be able to submit a new receipt.
+                {t("co.doneNote")}{" "}
+                <Link href="/track" className="u-link">{order.ref}</Link>
               </p>
             </StepPanel>
           )}
@@ -534,7 +531,7 @@ export default function CheckoutPage() {
         {/* Order summary rail */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <div className="border border-line p-6">
-            <h2 className="font-display text-lg uppercase">Order</h2>
+            <h2 className="font-display text-lg uppercase">{t("co.order")}</h2>
             <ul className="mt-4 space-y-4">
               {cart.lines.map((l) => (
                 <li key={`${l.productId}-${l.color}-${l.size}`} className="flex items-center gap-3">
@@ -550,9 +547,9 @@ export default function CheckoutPage() {
               ))}
             </ul>
             <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[13px]">
-              <div className="flex justify-between"><dt className="opacity-60">{cart.lines.length} item{cart.lines.length === 1 ? "" : "s"}</dt><dd className="tabular-nums">{formatMoney(subtotal)}</dd></div>
-              <div className="flex justify-between text-[11px] uppercase tracking-[0.14em] opacity-50"><dt>Shipping</dt><dd>Free, always</dd></div>
-              <div className="flex justify-between border-t border-line pt-2 font-medium"><dt>Total</dt><dd className="tabular-nums">{formatMoney(total)}</dd></div>
+              <div className="flex justify-between"><dt className="opacity-60">{t(cart.lines.length === 1 ? "co.items" : "co.itemsPlural", { n: cart.lines.length })}</dt><dd className="tabular-nums">{formatMoney(subtotal)}</dd></div>
+              <div className="flex justify-between text-[11px] uppercase tracking-[0.14em] opacity-50"><dt>{t("cart.shipping")}</dt><dd>{t("co.shippingFree")}</dd></div>
+              <div className="flex justify-between border-t border-line pt-2 font-medium"><dt>{t("cart.total")}</dt><dd className="tabular-nums">{formatMoney(total)}</dd></div>
             </dl>
           </div>
         </aside>

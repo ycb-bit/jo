@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatMoney, timeAgo } from "@/lib/utils";
-import { ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/types";
+import type { OrderStatus } from "@/lib/types";
 import { ORDER_STATUS_FLOW } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { BackButton } from "@/components/back-button";
+import { useT } from "@/lib/i18n";
 
 type TrackResult = {
   ref: string;
@@ -22,6 +24,7 @@ type TrackResult = {
 };
 
 export default function TrackOrderPage() {
+  const { t } = useT();
   const [ref, setRef] = useState("");
   const [email, setEmail] = useState("");
   const [result, setResult] = useState<TrackResult | null>(null);
@@ -33,7 +36,7 @@ export default function TrackOrderPage() {
     setError("");
     setResult(null);
     if (ref.trim().length < 4 || !email.includes("@")) {
-      setError("Enter your reference code and the email you ordered with");
+      setError(t("track.enterBoth"));
       return;
     }
     setBusy(true);
@@ -44,10 +47,10 @@ export default function TrackOrderPage() {
         body: JSON.stringify({ ref: ref.trim(), email: email.trim() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not find that order");
+      if (!res.ok) throw new Error(data.error || t("track.notFound"));
       setResult(data as TrackResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not find that order");
+      setError(err instanceof Error ? err.message : t("track.notFound"));
     } finally {
       setBusy(false);
     }
@@ -58,17 +61,17 @@ export default function TrackOrderPage() {
 
   return (
     <div className="mx-auto max-w-[900px] px-5 pb-28 pt-14 md:px-10">
-      <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">Order status</p>
-      <h1 className="font-display mt-2 text-5xl uppercase md:text-6xl">Track an order</h1>
+      <BackButton />
+      <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">{t("track.kicker")}</p>
+      <h1 className="font-display mt-2 text-5xl uppercase md:text-6xl">{t("track.title")}</h1>
       <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
-        Your reference is the code we gave you at checkout — it looks like{" "}
-        <strong>JO-29P753MB</strong>. Enter it with the email you ordered with and you&apos;ll
-        see exactly where your order is.
+        {t("track.introA")}{" "}
+        <strong>JO-29P753MB</strong>. {t("track.introB")}
       </p>
 
       <form onSubmit={search} className="mt-10 grid gap-5 border border-ink p-6 sm:grid-cols-2 md:p-8">
         <label className="block">
-          <span className="text-[11px] uppercase tracking-[0.2em] opacity-60">Reference</span>
+          <span className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("track.reference")}</span>
           <input
             className="input mt-2 uppercase"
             placeholder="JO-29P753MB"
@@ -79,7 +82,7 @@ export default function TrackOrderPage() {
           />
         </label>
         <label className="block">
-          <span className="text-[11px] uppercase tracking-[0.2em] opacity-60">Email</span>
+          <span className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("track.email")}</span>
           <input
             className="input mt-2"
             type="email"
@@ -94,7 +97,7 @@ export default function TrackOrderPage() {
           disabled={busy}
           className="border border-ink bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:opacity-40 sm:col-span-2"
         >
-          {busy ? "Looking…" : "Find my order →"}
+          {busy ? t("track.looking") : t("track.find")}
         </button>
       </form>
 
@@ -117,11 +120,11 @@ export default function TrackOrderPage() {
                       : "opacity-60"
                 )}
               >
-                {ORDER_STATUS_LABEL[result.status] || result.status}
+                {t(`status.${result.status}`)}
               </p>
             </div>
             <p className="mt-2 text-[12px] opacity-55">
-              Placed {timeAgo(result.createdAt)} · updated {timeAgo(result.updatedAt)}
+              {t("track.placed", { placed: timeAgo(result.createdAt), updated: timeAgo(result.updatedAt) })}
             </p>
 
             {/* Progress */}
@@ -139,7 +142,7 @@ export default function TrackOrderPage() {
                       {done ? "✓" : i + 1}
                     </span>
                     <p className={cn("mt-2 text-[10px] uppercase tracking-[0.14em]", !done && "opacity-40")}>
-                      {ORDER_STATUS_LABEL[s]}
+                      {t(`status.${s}`)}
                     </p>
                   </li>
                 );
@@ -149,14 +152,16 @@ export default function TrackOrderPage() {
             {terminal && (
               <p className="mt-6 border-t border-line pt-5 text-[13px] leading-relaxed opacity-75">
                 {result.status === "rejected"
-                  ? `Jo couldn't verify the payment${result.rejectionReason ? `: ${result.rejectionReason}` : ""}. Send us the receipt again from your account page.`
-                  : "This order was cancelled."}
+                  ? result.rejectionReason
+                    ? t("track.rejectedWhy", { reason: result.rejectionReason })
+                    : t("track.rejected")
+                  : t("track.cancelled")}
               </p>
             )}
 
             {result.trackingNote && (
               <p className="mt-6 border-t border-line pt-5 text-[13px]">
-                <span className="opacity-60">Tracking — </span>
+                <span className="opacity-60">{t("track.tracking")} </span>
                 {result.trackingNote}
               </p>
             )}
@@ -172,7 +177,7 @@ export default function TrackOrderPage() {
                 </li>
               ))}
               <li className="flex items-center justify-between pt-4 font-medium">
-                <span>Total</span>
+                <span>{t("track.total")}</span>
                 <span className="tabular-nums">{formatMoney(result.total, result.currency)}</span>
               </li>
             </ul>
@@ -180,10 +185,10 @@ export default function TrackOrderPage() {
 
           <div className="mt-6 flex flex-wrap gap-5 text-[11px] uppercase tracking-[0.18em]">
             {!result.receiptSubmitted && !terminal && (
-              <Link href="/account" className="u-link text-ember">Submit your receipt →</Link>
+              <Link href="/account" className="u-link text-ember">{t("track.submitReceipt")}</Link>
             )}
-            <Link href="/account" className="u-link">All your orders →</Link>
-            <Link href="/shop" className="u-link opacity-60">Back to the rack</Link>
+            <Link href="/account" className="u-link">{t("track.allOrders")}</Link>
+            <Link href="/shop" className="u-link opacity-60">{t("track.backToRack")}</Link>
           </div>
         </div>
       )}

@@ -5,27 +5,35 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { watchProducts } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { Reveal } from "@/components/reveal";
+import { BackButton } from "@/components/back-button";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import type { Product, StoreSettings } from "@/lib/types";
 
 const DEFAULT_CATEGORIES = ["outerwear", "knitwear", "tops", "bottoms", "accessories"];
-const SORTS = [
-  ["new", "Newest"],
-  ["price-asc", "Price ↑"],
-  ["price-desc", "Price ↓"],
-] as const;
 
 function ShopInner() {
   const params = useSearchParams();
   const router = useRouter();
+  const { t } = useT();
   const category = params.get("category") || "all";
   const [products, setProducts] = useState<Product[] | null>(null);
   const [sort, setSort] = useState<string>("new");
   const [maxPrice, setMaxPrice] = useState(0);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const SORTS = useMemo(
+    () =>
+      [
+        ["new", t("shop.sortNew")],
+        ["price-asc", "Price ↑"],
+        ["price-desc", "Price ↓"],
+      ] as const,
+    [t]
+  );
 
   useEffect(() => {
     // Admin-managed categories (Admin → Settings → Categories)
@@ -44,29 +52,45 @@ function ShopInner() {
     setLoadError(null);
     return watchProducts(
       setProducts,
-      {
-        category: category === "all" ? undefined : category,
-        sort,
-      },
-      () => setLoadError("The rack could not be loaded. Please refresh in a moment.")
+      { sort },
+      () => setLoadError(t("shop.errorBody"))
     );
-  }, [category, sort]);
+    // `t` is only used inside the failure callback — re-subscribing on a
+    // language change would refetch the whole rack for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   const priceCeil = useMemo(() => {
     if (!products) return 0;
     return Math.max(...products.map((p) => p.price), 100);
   }, [products]);
 
+  // Filter options: the admin-curated list plus whatever categories the
+  // products actually carry. A piece saved under a category that was later
+  // removed from settings still needs a way to be reached.
+  const catOptions = useMemo(() => {
+    const seen = new Set<string>();
+    categories.forEach((c) => c && seen.add(c));
+    (products || []).forEach((p) => p.category && seen.add(p.category));
+    if (category !== "all") seen.add(category);
+    return [...seen];
+  }, [categories, products, category]);
+
   const visible = useMemo(() => {
     if (!products) return [];
-    return maxPrice > 0 ? products.filter((p) => p.price <= maxPrice) : products;
-  }, [products, maxPrice]);
+    const byCategory =
+      category === "all"
+        ? products
+        : products.filter((p) => (p.category || "").toLowerCase() === category.toLowerCase());
+    return maxPrice > 0 ? byCategory.filter((p) => p.price <= maxPrice) : byCategory;
+  }, [products, maxPrice, category]);
 
   return (
     <div className="mx-auto max-w-[1440px] px-5 pb-28 pt-14 md:px-10">
+      <BackButton />
       <Reveal>
         <h1 className="font-display text-[13vw] font-black uppercase leading-[0.85] md:text-[7vw]">
-          The rack<span className="text-ember">.</span>
+          {t("shop.title")}<span className="text-ember">.</span>
         </h1>
       </Reveal>
 
@@ -75,14 +99,14 @@ function ShopInner() {
           <div className="flex items-center gap-4">
             {/* Category dropdown — native select (the triangle one), admin-managed list */}
             <label className="relative flex items-center">
-              <span className="mr-3 text-[11px] uppercase tracking-[0.16em] opacity-60">Category</span>
+              <span className="mr-3 text-[11px] uppercase tracking-[0.16em] opacity-60">{t("shop.category")}</span>
               <select
                 value={category}
                 onChange={(e) => router.push(e.target.value === "all" ? "/shop" : `/shop?category=${e.target.value}`)}
                 className="appearance-none border border-ink bg-transparent py-1.5 pl-3.5 pr-9 text-[11px] uppercase tracking-[0.16em] outline-none"
               >
-                <option value="all">All pieces</option>
-                {categories.map((c) => (
+                <option value="all">{t("shop.allPieces")}</option>
+                {catOptions.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -93,7 +117,7 @@ function ShopInner() {
           </div>
           <div className="flex items-center gap-5 text-[11px] uppercase tracking-[0.16em]">
             <label className="flex items-center gap-2 opacity-80">
-              Max
+              {t("shop.max")}
               <input
                 type="range"
                 min={0}
@@ -103,7 +127,7 @@ function ShopInner() {
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
                 className="h-1 w-28 accent-ember"
               />
-              {maxPrice > 0 ? `${maxPrice.toLocaleString()} Br` : "any"}
+              {maxPrice > 0 ? `${maxPrice.toLocaleString()} Br` : t("shop.any")}
             </label>
             <div className="flex gap-1">
               {SORTS.map(([v, label]) => (
@@ -121,18 +145,20 @@ function ShopInner() {
       </div>
 
       <p className="mt-6 text-[11px] uppercase tracking-[0.2em] opacity-50">
-        {products ? `${visible.length} piece${visible.length === 1 ? "" : "s"}` : "Loading"}
+        {products
+          ? t(visible.length === 1 ? "shop.countOne" : "shop.count", { n: visible.length })
+          : t("shop.loading")}
       </p>
 
       {loadError ? (
         <div className="mt-20 border border-ember/40 p-16 text-center">
-          <p className="font-display text-3xl uppercase">Rack unavailable</p>
+          <p className="font-display text-3xl uppercase">{t("shop.errorTitle")}</p>
           <p className="mt-3 opacity-60">{loadError}</p>
           <button
             onClick={() => router.refresh()}
             className="mt-6 border border-ink px-6 py-2.5 text-[11px] uppercase tracking-[0.16em] transition-colors hover:bg-ink hover:text-bone"
           >
-            Try again
+            {t("shop.retry")}
           </button>
         </div>
       ) : products === null ? (
@@ -143,8 +169,8 @@ function ShopInner() {
         </div>
       ) : visible.length === 0 ? (
         <div className="mt-20 border border-line p-16 text-center">
-          <p className="font-display text-3xl uppercase">Nothing here yet</p>
-          <p className="mt-3 opacity-60">Jo hasn&apos;t hung anything in this corner. Check the full rack.</p>
+          <p className="font-display text-3xl uppercase">{t("shop.emptyTitle")}</p>
+          <p className="mt-3 opacity-60">{t("shop.emptyBody")}</p>
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-2 gap-5 md:grid-cols-4 md:gap-7">

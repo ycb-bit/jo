@@ -11,9 +11,11 @@ import { Magnetic } from "@/components/magnetic";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, limit, orderBy } from "firebase/firestore";
 import { LookImage } from "@/components/look-image";
+import { useT } from "@/lib/i18n";
 import type { Product, Look } from "@/lib/types";
 
 export default function Home() {
+  const { t } = useT();
   const [featured, setFeatured] = useState<Product[]>([]);
   const [looks, setLooks] = useState<Look[]>([]);
   const heroRef = typeof window === "undefined" ? null : null;
@@ -76,9 +78,9 @@ export default function Home() {
               WebkitTextStroke: "0.018em #FFFFFF",
             }}
           >
-            Cloth,
+            {t("home.heroA")}
             <br />
-            made to be
+            {t("home.heroB")}
           </motion.h1>
         </motion.div>
 
@@ -95,7 +97,7 @@ export default function Home() {
               transition={{ delay: 0.2, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
               className="mb-4 text-[11px] uppercase tracking-[0.34em] opacity-70"
             >
-              Independent cloth maker — Est. in a garage, worn everywhere
+              {t("home.kicker")}
             </motion.p>
             <motion.h1
               initial={{ opacity: 0, y: 34 }}
@@ -104,7 +106,7 @@ export default function Home() {
               className="font-display text-[17vw] font-black uppercase leading-[0.82] md:text-[11vw]"
               style={{ color: "#FFFFFF" }}
             >
-              worn out.
+              {t("home.heroC")}
             </motion.h1>
           </div>
         </motion.div>
@@ -115,7 +117,7 @@ export default function Home() {
           transition={{ delay: 1.1, duration: 0.8 }}
           className="absolute bottom-8 z-10 flex flex-col items-center gap-2 text-[10px] uppercase tracking-[0.3em] opacity-60"
         >
-          <span>Scroll</span>
+          <span>{t("home.scroll")}</span>
           <motion.span
             animate={{ y: [0, 8, 0] }}
             transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
@@ -129,15 +131,13 @@ export default function Home() {
         <div className="mx-auto max-w-[1440px] px-5 py-24 md:px-10 md:py-36">
           <Reveal>
             <p className="max-w-4xl font-display text-3xl uppercase leading-[1.05] md:text-6xl">
-              One pair of hands. A single Juki. Fabric sourced in small lots and cut like it
-              matters — <span className="text-ember">because it does.</span>
+              {t("home.manifestoA")}
+              <span className="text-ember">{t("home.manifestoAccent")}</span>
             </p>
           </Reveal>
           <Reveal delay={140}>
             <p className="mt-8 max-w-xl text-[15px] leading-relaxed opacity-70">
-              JO is not a brand with a factory. It&apos;s a cloth maker with a waiting list.
-              Every garment is numbered, signed inside the hem, and built to outlive the trend
-              that bought it.
+              {t("home.manifestoBody")}
             </p>
           </Reveal>
         </div>
@@ -148,11 +148,11 @@ export default function Home() {
         <div className="mx-auto max-w-[1440px] px-5 py-20 md:px-10 md:py-28">
           <div className="mb-10 flex items-end justify-between">
             <Reveal>
-              <h2 className="font-display text-4xl uppercase md:text-6xl">Latest drop</h2>
+              <h2 className="font-display text-4xl uppercase md:text-6xl">{t("home.latest")}</h2>
             </Reveal>
             <Reveal delay={100}>
               <Link href="/shop" className="u-link text-[12px] uppercase tracking-[0.2em]">
-                View all →
+                {t("home.viewAll")}
               </Link>
             </Reveal>
           </div>
@@ -175,7 +175,7 @@ export default function Home() {
       {/* ============ LOOKBOOK MARQUEE ============ */}
       <section className="overflow-hidden border-y border-line bg-bone-dim py-14 md:py-20">
         <p className="mb-8 text-center text-[11px] uppercase tracking-[0.3em] opacity-50">
-          The album — straight from the bench
+          {t("home.album")}
         </p>
         {looks.length === 0 ? (
           <motion.div className="flex w-max gap-5 md:gap-8" animate={{ x: ["0%", "-50%"] }} transition={{ repeat: Infinity, duration: 38, ease: "linear" }}>
@@ -206,18 +206,18 @@ export default function Home() {
       {/* ============ PROCESS ============ */}
       <section className="mx-auto max-w-[1440px] px-5 py-24 md:px-10 md:py-36">
         <Reveal>
-          <h2 className="font-display text-4xl uppercase md:text-6xl">How a JO happens</h2>
+          <h2 className="font-display text-4xl uppercase md:text-6xl">{t("home.process")}</h2>
         </Reveal>
         <div className="mt-14 grid gap-10 md:grid-cols-3">
           {[
-            ["01", "Sourced", "Deadstock and small-lot fabric, bought once. When it's gone, it's gone — most pieces never repeat."],
-            ["02", "Cut & sewn", "One pattern cutter, one machinist, zero rush. A jacket takes two days. That's the point."],
-            ["03", "Numbered", "Every piece is signed and numbered inside the hem. Yours is the only one like it."],
-          ].map(([n, t, d], i) => (
+            ["01", t("home.step1"), t("home.step1Body")],
+            ["02", t("home.step2"), t("home.step2Body")],
+            ["03", t("home.step3"), t("home.step3Body")],
+          ].map(([n, title, d], i) => (
             <Reveal key={n} delay={i * 120}>
               <div className="border-t border-ink pt-6">
                 <p className="font-display text-ember text-2xl">{n}</p>
-                <h3 className="font-display mt-3 text-2xl uppercase">{t}</h3>
+                <h3 className="font-display mt-3 text-2xl uppercase">{title}</h3>
                 <p className="mt-3 text-[15px] leading-relaxed opacity-70">{d}</p>
               </div>
             </Reveal>
@@ -230,7 +230,7 @@ export default function Home() {
                 href="/shop"
                 className="inline-block border border-ink bg-ink px-10 py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors duration-300 hover:bg-ember hover:border-ember"
               >
-                Shop the drop
+                {t("home.shopDrop")}
               </Link>
             </Magnetic>
           </div>

@@ -8,6 +8,7 @@ import { getDownloadURL, ref as sRef } from "firebase/storage";
 import { formatMoney, timeAgo, cn } from "@/lib/utils";
 import { ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
 import { addressLines } from "@/lib/addresses";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const FILTERS: { key: string; label: string; statuses: OrderStatus[] }[] = [
   { key: "verify", label: "Verification queue", statuses: ["receipt_uploaded", "verifying"] },
@@ -27,6 +28,8 @@ export default function AdminOrders() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** Rejecting a receipt is irreversible for the customer — ask first. */
+  const [confirmReject, setConfirmReject] = useState(false);
 
   useEffect(() => {
     return onSnapshot(
@@ -40,6 +43,7 @@ export default function AdminOrders() {
     setSelected(o);
     setNote("");
     setReceiptPreview(null);
+    setConfirmReject(false);
     if (o.receiptData) {
       // New pipeline: inline data URI — no fetch needed.
       setReceiptPreview(o.receiptData);
@@ -61,7 +65,7 @@ export default function AdminOrders() {
       a?.phone,
       selected.email,
       ...(a ? addressLines(a) : []),
-      a?.country || "Ethiopia",
+      a?.country || "—",
     ]
       .filter(Boolean)
       .join("\n");
@@ -252,7 +256,7 @@ export default function AdminOrders() {
                         <p key={line}>{line}</p>
                       ))}
                       {selected.shippingAddress.postalCode && <p>{selected.shippingAddress.postalCode}</p>}
-                      <p>{selected.shippingAddress.country || "Ethiopia"}</p>
+                      <p>{selected.shippingAddress.country || "—"}</p>
                       <p className="tabular-nums">{selected.shippingAddress.phone}</p>
                     </address>
                   </div>
@@ -327,7 +331,7 @@ export default function AdminOrders() {
                       <button onClick={() => act("verify")} disabled={busy} className="col-span-2 bg-ember py-3.5 text-[11px] uppercase tracking-[0.2em] text-bone transition-opacity hover:opacity-90 disabled:opacity-50">
                         ✓ Verify payment &amp; reserve stock
                       </button>
-                      <button onClick={() => act("reject")} disabled={busy} className="col-span-2 border border-bone/30 py-3 text-[11px] uppercase tracking-[0.2em] opacity-80 hover:border-bone disabled:opacity-50">
+                      <button onClick={() => setConfirmReject(true)} disabled={busy} className="col-span-2 border border-bone/30 py-3 text-[11px] uppercase tracking-[0.2em] opacity-80 hover:border-bone disabled:opacity-50">
                         Reject receipt
                       </button>
                     </>
@@ -348,6 +352,29 @@ export default function AdminOrders() {
                     </button>
                   )}
                 </div>
+
+                <ConfirmDialog
+                  open={confirmReject}
+                  title="Reject this receipt?"
+                  intro={
+                    <>
+                      The customer is told the payment couldn&apos;t be verified and can submit a new
+                      receipt. This is not a cancel — the order stays open for a fresh proof of payment.
+                      {note.trim() ? (
+                        <> Your note “{note.trim()}” is sent as the reason.</>
+                      ) : (
+                        " Add a note first if you want to give them a reason."
+                      )}
+                    </>
+                  }
+                  confirmLabel="Reject receipt"
+                  onCancel={() => setConfirmReject(false)}
+                  busy={busy}
+                  onConfirm={() => {
+                    setConfirmReject(false);
+                    void act("reject");
+                  }}
+                />
               </div>
             </div>
           )}

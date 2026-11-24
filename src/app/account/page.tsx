@@ -8,19 +8,22 @@ import { useToast } from "@/lib/store";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, limit, doc, updateDoc } from "firebase/firestore";
 import { formatMoney, timeAgo, cn } from "@/lib/utils";
-import { ORDER_STATUS_LABEL, type Order, type Address } from "@/lib/types";
+import type { Order, Address } from "@/lib/types";
 import {
   EMPTY_ADDRESS, missingAddressFields, normalizeAddresses, withAddress, withoutAddress,
 } from "@/lib/addresses";
 import { AddressCard } from "@/components/address-card";
 import { AddressFields } from "@/components/address-fields";
+import { BackButton } from "@/components/back-button";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useT } from "@/lib/i18n";
 
 export default function AccountPage() {
   const { fbUser, profile, loading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const { t } = useT();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [tab, setTab] = useState<"orders" | "addresses">("orders");
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export default function AccountPage() {
       await updateDoc(doc(db, "users", fbUser!.uid), { addresses: next });
       toast(okMessage);
     } catch {
-      toast("Could not save — check your connection", "err");
+      toast(t("toast.saveFailed"), "err");
     }
   };
 
@@ -90,23 +93,23 @@ export default function AccountPage() {
   const saveAddress = async () => {
     const missing = missingAddressFields(draft);
     if (missing.length) {
-      toast(`Still needed: ${missing.join(", ")}`, "err");
+      toast(t("co.stillNeeded", { fields: missing.map((f) => t(`address.${f}`)).join(", ") }), "err");
       return;
     }
     setSavingAddr(true);
     await persist(
       withAddress(book, { ...draft, isDefault: makeDefault }, { makeDefault }),
-      editingId ? "Address updated" : "Address saved"
+      editingId ? t("toast.addressUpdated") : t("toast.addressSaved")
     );
     setSavingAddr(false);
     startNew();
   };
 
   const removeAddress = async (id: string) =>
-    persist(withoutAddress(book, id), "Address removed");
+    persist(withoutAddress(book, id), t("toast.addressRemoved"));
 
   const makeDefaultAddress = async (id: string) =>
-    persist(book.map((a) => ({ ...a, isDefault: a.id === id })), "Default address updated");
+    persist(book.map((a) => ({ ...a, isDefault: a.id === id })), t("toast.defaultUpdated"));
 
   const statusTone = (s: string) =>
     s === "confirmed" || s === "shipped" || s === "delivered"
@@ -117,52 +120,53 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-5 pb-28 pt-14 md:px-10">
+      <BackButton />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">Signed in as</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">{t("account.signedInAs")}</p>
           <h1 className="font-display mt-1 text-5xl uppercase md:text-6xl">{profile.displayName}</h1>
           <p className="mt-1 text-[13px] opacity-60">{profile.email}</p>
         </div>
         <div className="flex gap-3 text-[11px] uppercase tracking-[0.18em]">
           {profile.role === "admin" && (
             <Link href="/admin" className="border border-ember px-4 py-2.5 text-ember transition-colors hover:bg-ember hover:text-bone">
-              Admin studio
+              {t("account.adminStudio")}
             </Link>
           )}
           <button onClick={() => signOut(auth)} className="border border-line px-4 py-2.5 transition-colors hover:border-ink">
-            Sign out
+            {t("account.signOut")}
           </button>
         </div>
       </div>
 
       <div className="mt-10 flex gap-6 border-b border-line text-[12px] uppercase tracking-[0.18em]">
-        {(["orders", "addresses"] as const).map((t) => (
+        {(["orders", "addresses"] as const).map((key) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn("pb-3 transition-colors", tab === t ? "border-b-2 border-ink text-ink" : "opacity-50 hover:opacity-80")}
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn("pb-3 transition-colors", tab === key ? "border-b-2 border-ink text-ink" : "opacity-50 hover:opacity-80")}
           >
-            {t === "orders" ? `Orders (${orders?.length ?? 0})` : "Address book"}
+            {key === "orders" ? t("account.ordersTab", { n: orders?.length ?? 0 }) : t("account.addressesTab")}
           </button>
         ))}
-        <Link href="/wishlist" className="ml-auto pb-3 opacity-50 hover:opacity-80">Saved pieces →</Link>
+        <Link href="/wishlist" className="ml-auto pb-3 opacity-50 hover:opacity-80">{t("account.savedPieces")}</Link>
       </div>
 
       {tab === "orders" && (
         <div className="mt-8">
           {ordersError ? (
             <div className="border border-ember p-14 text-center">
-              <p className="font-display text-2xl uppercase">Orders unavailable</p>
+              <p className="font-display text-2xl uppercase">{t("account.ordersUnavailable")}</p>
               <p className="mt-2 text-[13px] opacity-70">{ordersError}</p>
-              <button onClick={() => router.refresh()} className="u-link mt-5 text-[12px] uppercase tracking-[0.2em]">Try again →</button>
+              <button onClick={() => router.refresh()} className="u-link mt-5 text-[12px] uppercase tracking-[0.2em]">{t("account.tryAgain")}</button>
             </div>
           ) : orders === null ? (
             <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-20 w-full" />)}</div>
           ) : orders.length === 0 ? (
             <div className="border border-line p-14 text-center">
-              <p className="font-display text-2xl uppercase">No orders yet</p>
-              <p className="mt-2 text-[13px] opacity-60">When you place one, it appears here with live status.</p>
-              <Link href="/shop" className="u-link mt-5 inline-block text-[12px] uppercase tracking-[0.2em]">Start shopping →</Link>
+              <p className="font-display text-2xl uppercase">{t("account.noOrders")}</p>
+              <p className="mt-2 text-[13px] opacity-60">{t("account.noOrdersBody")}</p>
+              <Link href="/shop" className="u-link mt-5 inline-block text-[12px] uppercase tracking-[0.2em]">{t("account.startShopping")}</Link>
             </div>
           ) : (
             <ul className="divide-y divide-line border-y border-line">
@@ -180,14 +184,14 @@ export default function AccountPage() {
                           about. First three pieces, then the overflow count. */}
                       <p className="mt-0.5 text-[12px] opacity-60">
                         {items.slice(0, 3).map((it) => `${it.name} ×${it.qty}`).join(" · ")}
-                        {items.length > 3 && ` · +${items.length - 3} more`}
+                        {items.length > 3 && ` · ${t("account.more", { n: items.length - 3 })}`}
                       </p>
                       <p className="text-[11px] opacity-50 tabular-nums">
                         {timeAgo(o.createdAt)} · {items.length} item{items.length === 1 ? "" : "s"} · {formatMoney(o.total, o.currency)}
                       </p>
                     </div>
                     <span className={cn("text-[11px] uppercase tracking-[0.18em]", statusTone(o.status))}>
-                      {ORDER_STATUS_LABEL[o.status] || o.status}
+                      {t(`status.${o.status}`)}
                     </span>
                   </Link>
                 </li>
@@ -203,17 +207,16 @@ export default function AccountPage() {
           <div>
             <div className="flex items-baseline justify-between gap-4">
               <h3 className="font-display text-sm uppercase tracking-[0.16em]">
-                Saved addresses ({book.length})
+                {t("account.savedAddresses", { n: book.length })}
               </h3>
               <button onClick={startNew} className="u-link text-[11px] uppercase tracking-[0.18em] text-ember">
-                + Add address
+                {t("account.addAddress")}
               </button>
             </div>
 
             {book.length === 0 ? (
               <p className="mt-6 border border-line p-10 text-center text-[13px] leading-relaxed opacity-60">
-                No saved addresses yet. Add one on the right and checkout becomes a single tap —
-                we&apos;ll pre-select it every time.
+                {t("account.noAddresses")}
               </p>
             ) : (
               <ul className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -225,12 +228,12 @@ export default function AccountPage() {
                         <>
                           {!a.isDefault && (
                             <button onClick={() => makeDefaultAddress(a.id!)} className="u-link text-ember">
-                              Make default
+                              {t("account.makeDefault")}
                             </button>
                           )}
-                          <button onClick={() => startEdit(a)} className="u-link">Edit</button>
+                          <button onClick={() => startEdit(a)} className="u-link">{t("account.edit")}</button>
                           <button onClick={() => removeAddress(a.id!)} className="u-link text-red-700">
-                            Remove
+                            {t("account.remove")}
                           </button>
                         </>
                       }
@@ -241,14 +244,13 @@ export default function AccountPage() {
             )}
 
             <p className="mt-5 max-w-md text-[12px] leading-relaxed opacity-55">
-              Your default address is the one checkout picks for you — change it any time with
-              &ldquo;Make default&rdquo;.
+              {t("account.defaultNote")}
             </p>
           </div>
 
           <div className="border border-ink p-6">
             <h3 className="font-display text-sm uppercase tracking-[0.16em]">
-              {editingId ? "Edit address" : "Add an address"}
+              {editingId ? t("account.editAddress") : t("account.addAnAddress")}
             </h3>
             <div className="mt-5">
               <AddressFields address={draft} onChange={setDraft} showLabel />
@@ -261,7 +263,7 @@ export default function AccountPage() {
                 onChange={(e) => setMakeDefault(e.target.checked)}
                 className="h-4 w-4 accent-ember"
               />
-              Use as my default address
+              {t("account.useAsDefault")}
             </label>
 
             <div className="mt-6 flex gap-3">
@@ -270,14 +272,14 @@ export default function AccountPage() {
                 disabled={savingAddr}
                 className="flex-1 border border-ink bg-ink py-3 text-[11px] uppercase tracking-[0.2em] text-bone transition-colors hover:border-ember hover:bg-ember disabled:opacity-50"
               >
-                {savingAddr ? "Saving…" : editingId ? "Save changes" : "Save address"}
+                {savingAddr ? t("account.saving") : editingId ? t("account.saveChanges") : t("account.saveAddress")}
               </button>
               {editingId && (
                 <button
                   onClick={startNew}
                   className="border border-line px-5 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:border-ink"
                 >
-                  Cancel
+                  {t("account.cancel")}
                 </button>
               )}
             </div>

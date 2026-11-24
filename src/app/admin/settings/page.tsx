@@ -5,6 +5,7 @@ import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/lib/store";
 import { doc, onSnapshot } from "firebase/firestore";
 import type { PaymentMethod, StoreSettings } from "@/lib/types";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const DEFAULTS: StoreSettings = {
   currency: "ETB",
@@ -33,6 +34,10 @@ export default function AdminSettings() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [newCat, setNewCat] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Which payment-method change is waiting for a yes. */
+  const [methodConfirm, setMethodConfirm] = useState<
+    { kind: "add" } | { kind: "remove"; id: string; name: string } | null
+  >(null);
 
   useEffect(() => {
     return onSnapshot(
@@ -83,6 +88,56 @@ export default function AdminSettings() {
     setSettings({ ...settings, paymentMethods: next });
   };
 
+  /**
+   * Categories save the moment they are added or removed. Keeping them behind
+   * the "Save settings" button further down the page is what made a new
+   * category look like it never stuck — and there is no cap on how many the
+   * shop can carry.
+   *
+   * Only `categories` is sent: the request must never carry the other fields
+   * still open in this form, or an unsaved edit to a payment method would be
+   * written (or reverted) as a side effect of adding a category.
+   */
+  const saveCategories = async (categories: string[], message: string) => {
+    setBusy(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ settings: { categories } }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Save failed");
+      toast(message);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Save failed", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addCategory = () => {
+    if (!settings) return;
+    const value = newCat.trim();
+    if (!value) return;
+    if (settings.categories.some((c) => c.toLowerCase() === value.toLowerCase())) {
+      toast(`“${value}” is already in the list`, "err");
+      setNewCat("");
+      return;
+    }
+    const next: StoreSettings = { ...settings, categories: [...settings.categories, value] };
+    setSettings(next);
+    setNewCat("");
+    void saveCategories(next.categories, `Added “${value}” — it's live in the shop filter`);
+  };
+
+  const removeCategory = (name: string) => {
+    if (!settings) return;
+    const categories = settings.categories.filter((c) => c !== name);
+    setSettings({ ...settings, categories });
+    void saveCategories(categories, `Removed “${name}” — pieces keep theirs`);
+  };
+
   if (!settings) return <div className="skeleton h-64 w-full" />;
 
   return (
@@ -95,7 +150,7 @@ export default function AdminSettings() {
         <div className="flex items-center justify-between">
           <h2 className="font-display text-xl uppercase">Payment methods</h2>
           <button
-            onClick={() => setSettings({ ...settings, paymentMethods: [...settings.paymentMethods, newMethod()] })}
+            onClick={() => setMethodConfirm({ kind: "add" })}
             className="border border-bone/30 px-4 py-2 text-[11px] uppercase tracking-[0.18em] hover:border-bone"
           >
             + Add method
@@ -113,7 +168,7 @@ export default function AdminSettings() {
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
                   <button onClick={() => moveMethod(idx, -1)} disabled={idx === 0} className="opacity-60 hover:opacity-100 disabled:opacity-20">↑</button>
                   <button onClick={() => moveMethod(idx, 1)} disabled={idx === settings.paymentMethods.length - 1} className="opacity-60 hover:opacity-100 disabled:opacity-20">↓</button>
-                  <button onClick={() => removeMethod(m.id)} className="text-ember opacity-80 hover:opacity-100">Remove</button>
+                  <button onClick={() => setMethodConfirm({ kind: "remove", id: m.id, name: m.name || `Method ${idx + 1}` })} className="text-ember opacity-80 hover:opacity-100">Remove</button>
                 </div>
               </div>
 
@@ -190,16 +245,23 @@ export default function AdminSettings() {
 
       {/* Categories */}
       <div className="mt-10">
-        <h2 className="font-display text-xl uppercase">Categories</h2>
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="font-display text-xl uppercase">Categories</h2>
+          <span className="text-[11px] uppercase tracking-[0.16em] opacity-50">
+            {settings.categories.length} {settings.categories.length === 1 ? "category" : "categories"}
+          </span>
+        </div>
         <p className="mt-1 text-[12px] opacity-50">
-          The filter list on the shop page. Removing one won&apos;t touch products — they just won&apos;t be reachable by that filter until re-added.
+          The filter list on the shop page — add as many as you need. Each one saves the moment you add it.
+          Removing one never touches products: pieces keep their category, and it still appears in the shop
+          filter because the products use it.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {settings.categories.map((c, idx) => (
             <span key={`${c}-${idx}`} className="flex items-center gap-2 border border-bone/25 py-1.5 pl-3.5 pr-2 text-[11px] uppercase tracking-[0.16em]">
               {c}
               <button
-                onClick={() => setSettings({ ...settings, categories: settings.categories.filter((_, i) => i !== idx) })}
+                onClick={() => removeCategory(c)}
                 className="text-ember opacity-80 hover:opacity-100"
                 aria-label={`Remove category ${c}`}
               >
@@ -213,26 +275,16 @@ export default function AdminSettings() {
             value={newCat}
             onChange={(e) => setNewCat(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && newCat.trim()) {
+              if (e.key === "Enter") {
                 e.preventDefault();
-                const v = newCat.trim().toLowerCase();
-                if (!settings.categories.includes(v)) {
-                  setSettings({ ...settings, categories: [...settings.categories, v] });
-                }
-                setNewCat("");
+                addCategory();
               }
             }}
           />
           <button
-            onClick={() => {
-              if (!newCat.trim()) return;
-              const v = newCat.trim().toLowerCase();
-              if (!settings.categories.includes(v)) {
-                setSettings({ ...settings, categories: [...settings.categories, v] });
-              }
-              setNewCat("");
-            }}
-            className="border border-bone/30 px-3 py-1.5 text-[11px] uppercase tracking-[0.16em] hover:border-bone"
+            onClick={addCategory}
+            disabled={busy || !newCat.trim()}
+            className="border border-bone/30 px-3 py-1.5 text-[11px] uppercase tracking-[0.16em] hover:border-bone disabled:opacity-40"
           >
             + Add
           </button>
@@ -242,14 +294,6 @@ export default function AdminSettings() {
       {/* General */}
       <div className="mt-10 space-y-5 text-[13px]">
         <h2 className="font-display text-xl uppercase">General</h2>
-        <label className="block">
-          <span className="opacity-60">Currency code (ETB by default — must be a valid ISO-4217 code)</span>
-          <input
-            className="mt-1 w-full border-b border-bone/25 bg-transparent py-2.5 outline-none focus:border-bone"
-            value={settings.currency}
-            onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
-          />
-        </label>
         <label className="block">
           <span className="opacity-60">Handling / packaging fee per order</span>
           <input
@@ -275,6 +319,27 @@ export default function AdminSettings() {
           {busy ? "Saving…" : "Save settings"}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={methodConfirm !== null}
+        title={methodConfirm?.kind === "remove" ? "Remove this payment method?" : "Add a payment method?"}
+        intro={
+          methodConfirm?.kind === "remove"
+            ? `Checkout will stop offering “${methodConfirm.name}”. Orders already placed keep their record — nothing else changes.`
+            : "A blank method appears below for you to fill in. Nothing goes live at checkout until you save settings."
+        }
+        confirmLabel={methodConfirm?.kind === "remove" ? "Remove method" : "Add method"}
+        onCancel={() => setMethodConfirm(null)}
+        onConfirm={() => {
+          if (!settings || !methodConfirm) return;
+          if (methodConfirm.kind === "add") {
+            setSettings({ ...settings, paymentMethods: [...settings.paymentMethods, newMethod()] });
+          } else {
+            removeMethod(methodConfirm.id);
+          }
+          setMethodConfirm(null);
+        }}
+      />
 
       <div className="mt-10 border border-bone/15 p-6 text-[12px] leading-relaxed opacity-60">
         <p className="font-display text-sm uppercase tracking-[0.16em] text-bone">How verification works</p>

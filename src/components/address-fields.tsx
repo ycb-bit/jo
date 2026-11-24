@@ -2,13 +2,14 @@
 
 import { cn } from "@/lib/utils";
 import type { Address } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 /**
  * The one address form for the whole store.
  *
  * Used by the account address book and by checkout step 1 so the fields,
- * placeholders and autofill behaviour never drift apart. Ethiopia-flavoured
- * copy (woreda / sub-city) because that is where the cloth ships from.
+ * placeholders and autofill behaviour never drift apart. Nothing is assumed
+ * about where the parcel goes: country is a field, not a hidden default.
  */
 
 const AUTOCOMPLETE: Partial<Record<keyof Address, string>> = {
@@ -34,10 +35,12 @@ export function AddressFields({
   showLabel?: boolean;
   className?: string;
 }) {
+  const { t } = useT();
+
   const field = (
     key: keyof Address,
     placeholder: string,
-    opts?: { wide?: boolean; type?: string; required?: boolean }
+    opts?: { wide?: boolean; type?: string }
   ) => (
     <label className={opts?.wide ? "sm:col-span-2" : ""}>
       <input
@@ -49,21 +52,21 @@ export function AddressFields({
         autoComplete={AUTOCOMPLETE[key]}
         onChange={(e) => onChange({ ...address, [key]: e.target.value })}
       />
-      </label>
+    </label>
   );
 
   return (
     <div className={cn("grid gap-5 sm:grid-cols-2", className)}>
-      {showLabel && field("label", "Label — Home, Studio, Mum's place")}
-      {field("fullName", "Full name")}
-      {field("phone", "Phone", { type: "tel" })}
-      {field("line1", "Street / landmark — e.g. Bole Rwanda St, near Getu Commercial", { wide: true })}
-      {field("line2", "Apartment, building, office (optional)", { wide: true, required: false })}
-      {field("city", "City")}
-      {field("subCity", "Sub-city / woreda — e.g. Bole, Yeka, Arada", { required: false })}
+      {showLabel && field("label", t("address.label"))}
+      {field("fullName", t("address.fullName"))}
+      {field("phone", t("address.phone"), { type: "tel" })}
+      {field("line1", t("address.line1"), { wide: true })}
+      {field("line2", t("address.line2"), { wide: true })}
+      {field("city", t("address.city"))}
+      {field("subCity", t("address.subCity"))}
+      {field("country", t("address.country"))}
       <p className="self-end pb-2 text-[12px] leading-relaxed opacity-55">
-        Shipping is free storewide, worldwide. We default to Ethiopia — tell us if it&apos;s
-        going elsewhere.
+        {t("address.note")}
       </p>
     </div>
   );

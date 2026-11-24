@@ -16,7 +16,8 @@ export const EMPTY_ADDRESS: Address = {
   city: "",
   subCity: "",
   postalCode: "",
-  country: "Ethiopia",
+  /** No assumed country — the form asks for it. */
+  country: "",
   phone: "",
 };
 
@@ -28,13 +29,17 @@ export function addressId(): string {
   return `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Fields the store actually needs to ship an order. */
-export function missingAddressFields(a: Partial<Address>): string[] {
-  const missing: string[] = [];
-  if (!a.fullName?.trim()) missing.push("Full name");
-  if (!a.phone?.trim()) missing.push("Phone");
-  if (!a.line1?.trim()) missing.push("Street");
-  if (!a.city?.trim()) missing.push("City");
+/**
+ * Fields the store actually needs to ship an order, as Address keys so callers
+ * can translate the labels (`address.fullName`, `address.city`, …).
+ */
+export function missingAddressFields(a: Partial<Address>): (keyof Address)[] {
+  const missing: (keyof Address)[] = [];
+  if (!a.fullName?.trim()) missing.push("fullName");
+  if (!a.phone?.trim()) missing.push("phone");
+  if (!a.line1?.trim()) missing.push("line1");
+  if (!a.city?.trim()) missing.push("city");
+  if (!a.country?.trim()) missing.push("country");
   return missing;
 }
 
@@ -44,7 +49,7 @@ export function isAddressComplete(a: Partial<Address>): boolean {
 
 /** The label a saved card shows: its own label, else its recipient. */
 export function addressTitle(a: Address): string {
-  return a.label?.trim() || a.fullName?.trim() || "Address";
+  return a.label?.trim() || a.fullName?.trim() || "";
 }
 
 /** One-line-ish summary for the picker card. */
@@ -75,7 +80,7 @@ export function normalizeAddresses(addresses: Address[] | undefined): Address[] 
       line2: a.line2 || "",
       subCity: a.subCity || "",
       postalCode: a.postalCode || "",
-      country: a.country || "Ethiopia",
+      country: a.country || "",
     }));
 
   if (!list.length) return [];

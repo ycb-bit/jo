@@ -11,14 +11,17 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { getDownloadURL, ref as sRef } from "firebase/storage";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { formatMoney, timeAgo } from "@/lib/utils";
-import { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
+import { ORDER_STATUS_FLOW, type Order, type OrderStatus } from "@/lib/types";
 import { OrderRef } from "@/components/order-ref";
+import { BackButton } from "@/components/back-button";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const { fbUser } = useAuth();
   const { toast } = useToast();
+  const { t } = useT();
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [file, setFile] = useState<File | null>(null);
   const [receiptRef, setReceiptRef] = useState("");
@@ -36,8 +39,8 @@ export default function OrderPage() {
   if (order === null) {
     return (
       <div className="mx-auto max-w-[1440px] px-5 py-32 text-center md:px-10">
-        <h1 className="font-display text-5xl uppercase">Order not found</h1>
-        <Link href="/account" className="u-link mt-6 inline-block text-[12px] uppercase tracking-[0.2em]">← Your orders</Link>
+        <h1 className="font-display text-5xl uppercase">{t("order.notFound")}</h1>
+        <Link href="/account" className="u-link mt-6 inline-block text-[12px] uppercase tracking-[0.2em]">{t("order.yourOrders")}</Link>
       </div>
     );
   }
@@ -61,11 +64,11 @@ export default function OrderPage() {
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId: order.id, dataUri, name: file.name }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Upload failed");
-      toast("Receipt uploaded");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t("toast.uploadFailed"));
+      toast(t("toast.receiptUploaded"));
       setFile(null);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Upload failed", "err");
+      toast(err instanceof Error ? err.message : t("toast.uploadFailed"), "err");
     } finally {
       setBusy(false);
     }
@@ -75,7 +78,7 @@ export default function OrderPage() {
     if (!fbUser) return;
     // Image-first: the photo is what Jo verifies; the reference is optional.
     if (!order.receiptData && !order.receiptUrl) {
-      toast("Add your receipt image first", "err");
+      toast(t("toast.addReceiptFirst"), "err");
       return;
     }
     setBusy(true);
@@ -86,10 +89,10 @@ export default function OrderPage() {
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId: order.id, receiptRef: receiptRef.trim() }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Submit failed");
-      toast("Receipt submitted — hang tight for verification");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t("toast.submitFailed"));
+      toast(t("toast.receiptSubmitted"));
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Submit failed", "err");
+      toast(err instanceof Error ? err.message : t("toast.submitFailed"), "err");
     } finally {
       setBusy(false);
     }
@@ -97,16 +100,17 @@ export default function OrderPage() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-5 pb-28 pt-14 md:px-10">
-      <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">Order</p>
+      <BackButton />
+      <p className="text-[11px] uppercase tracking-[0.22em] opacity-50">{t("order.kicker")}</p>
       <h1 className="font-display mt-2 text-5xl uppercase md:text-6xl">{order.ref || order.id.slice(0, 8)}</h1>
       <p className="mt-2 text-[13px] opacity-60">
-        Placed {timeAgo(order.createdAt)} · {formatMoney(order.total, order.currency)}
+        {t("order.placed", { placed: timeAgo(order.createdAt), amount: formatMoney(order.total, order.currency) })}
       </p>
 
       <OrderRef
         value={order.ref || order.id.slice(0, 8)}
-        label="Reference code"
-        hint="Quote this when you talk to Jo about the order."
+        label={t("order.referenceCode")}
+        hint={t("order.referenceHint")}
         className="mt-6 max-w-xl"
       />
 
@@ -114,11 +118,13 @@ export default function OrderPage() {
       <div className="mt-12 border border-ink p-6 md:p-10">
         {terminal ? (
           <div>
-            <p className="font-display text-3xl uppercase text-ember">{ORDER_STATUS_LABEL[order.status]}</p>
+            <p className="font-display text-3xl uppercase text-ember">{t(`status.${order.status}`)}</p>
             <p className="mt-3 max-w-lg text-[14px] leading-relaxed opacity-70">
               {order.status === "rejected"
-                ? `Jo couldn't verify the payment${order.rejectionReason ? `: ${order.rejectionReason}` : ""}. Upload a clearer receipt below or reach out and we'll sort it.`
-                : "This order was cancelled."}
+                ? order.rejectionReason
+                  ? t("order.rejectedWhy", { reason: order.rejectionReason })
+                  : t("order.rejected")
+                : t("order.cancelled")}
             </p>
           </div>
         ) : (
@@ -141,7 +147,7 @@ export default function OrderPage() {
                     {done ? "✓" : i + 1}
                   </motion.div>
                   <p className={cn("mt-3 text-[10px] uppercase tracking-[0.14em] md:mt-4", !done && "opacity-40")}>
-                    {ORDER_STATUS_LABEL[s]}
+                    {t(`status.${s}`)}
                   </p>
                   {i < ORDER_STATUS_FLOW.length - 1 && (
                     <span className={cn("absolute left-10 top-4 hidden h-px w-[calc(100%-2.5rem)] md:block", flowIdx > i ? "bg-ink" : "bg-line")} />
@@ -156,7 +162,7 @@ export default function OrderPage() {
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_340px]">
         {/* Items */}
         <div>
-          <h2 className="font-display text-xl uppercase">Pieces</h2>
+          <h2 className="font-display text-xl uppercase">{t("order.pieces")}</h2>
           <ul className="mt-4 divide-y divide-line border-y border-line">
             {order.items.map((it, i) => (
               <li key={i} className="flex items-center justify-between py-4 text-[14px]">
@@ -172,24 +178,23 @@ export default function OrderPage() {
           {/* Payment actions when not yet verified */}
           {canPay && (
             <div className="mt-8 border border-dashed border-ink/30 p-6">
-              <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Still need payment?</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("order.stillNeedPayment")}</p>
               <p className="mt-2 text-[13px] leading-relaxed opacity-70">
-                Send {formatMoney(order.total, order.currency)} via your chosen payment method, using
-                reference <strong>{order.ref}</strong>, then attach your receipt here.
+                {t("order.sendAmount", { amount: formatMoney(order.total, order.currency), ref: order.ref || "" })}
               </p>
               <label className="mt-4 flex cursor-pointer items-center justify-between border border-line px-4 py-3 text-[13px] transition-colors hover:border-ink">
-                <span>{file ? `${file.name} ✓` : order.receiptData || order.receiptUrl ? "Receipt attached ✓ — replace it" : "Choose receipt image"}</span>
+                <span>{file ? `${file.name} ✓` : order.receiptData || order.receiptUrl ? t("order.replaceReceipt") : t("order.chooseReceipt")}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <span className="opacity-50">Browse</span>
+                <span className="opacity-50">{t("order.browse")}</span>
               </label>
               <div className="mt-3 flex gap-3">
                 <button onClick={upload} disabled={!file || busy} className="flex-1 border border-ink bg-ink py-3 text-[11px] uppercase tracking-[0.2em] text-bone disabled:opacity-40">
-                  Upload receipt
+                  {t("order.uploadReceipt")}
                 </button>
               </div>
               <input
                 className="input mt-4"
-                placeholder="Bank reference (optional)"
+                placeholder={t("order.bankRefOptional")}
                 value={receiptRef}
                 onChange={(e) => setReceiptRef(e.target.value)}
               />
@@ -198,10 +203,10 @@ export default function OrderPage() {
                 disabled={busy || (!order.receiptData && !order.receiptUrl)}
                 className="mt-3 w-full border border-line py-3 text-[11px] uppercase tracking-[0.2em] hover:border-ink disabled:opacity-40"
               >
-                {(order.receiptData || order.receiptUrl) ? "Submit receipt for verification" : "Upload the image, then submit"}
+                {(order.receiptData || order.receiptUrl) ? t("order.submitVerify") : t("order.uploadThenSubmit")}
               </button>
               <p className="mt-3 text-[12px] leading-relaxed opacity-55">
-                The receipt photo is what Jo checks — the reference number is optional.
+                {t("order.receiptHint")}
               </p>
             </div>
           )}
@@ -210,7 +215,7 @@ export default function OrderPage() {
         {/* Meta */}
         <aside className="space-y-6">
           <div className="border border-line p-6 text-[13px]">
-            <h3 className="font-display text-sm uppercase tracking-[0.16em]">Shipping to</h3>
+            <h3 className="font-display text-sm uppercase tracking-[0.16em]">{t("order.shippingTo")}</h3>
             <address className="mt-3 not-italic leading-relaxed opacity-70">
               {order.shippingAddress?.fullName}<br />
               {order.shippingAddress?.line1}<br />
@@ -221,16 +226,16 @@ export default function OrderPage() {
           </div>
           {order.trackingNote && (
             <div className="border border-ember p-6 text-[13px]">
-              <h3 className="font-display text-sm uppercase tracking-[0.16em] text-ember">Tracking</h3>
+              <h3 className="font-display text-sm uppercase tracking-[0.16em] text-ember">{t("order.tracking")}</h3>
               <p className="mt-2 leading-relaxed opacity-80">{order.trackingNote}</p>
             </div>
           )}
           <div className="border border-line p-6">
-            <h3 className="font-display text-sm uppercase tracking-[0.16em]">Activity</h3>
+            <h3 className="font-display text-sm uppercase tracking-[0.16em]">{t("order.activity")}</h3>
             <ul className="mt-3 space-y-2.5 text-[12px]">
               {[...(order.history || [])].reverse().map((h, i) => (
                 <li key={i} className="flex justify-between gap-4 opacity-70">
-                  <span>{ORDER_STATUS_LABEL[h.status] || h.status}{h.note ? ` — ${h.note}` : ""}</span>
+                  <span>{t(`status.${h.status}`)}{h.note ? ` — ${h.note}` : ""}</span>
                   <span className="shrink-0 opacity-60">{timeAgo(h.at)}</span>
                 </li>
               ))}

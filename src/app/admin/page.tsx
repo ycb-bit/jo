@@ -353,7 +353,12 @@ export default function AdminOverview() {
 
               <div>
                 <div className="flex items-center justify-between">
-                  <h2 className="font-display text-xl uppercase">Low stock</h2>
+                  <h2 className="font-display text-xl uppercase">
+                    Low stock
+                    {data!.lowStock.length > 0 && (
+                      <span className="ml-2 text-ember">{data!.lowStock.length}</span>
+                    )}
+                  </h2>
                   <Link href="/admin/products" className="text-[11px] uppercase tracking-[0.16em] text-ember hover:underline">
                     Manage →
                   </Link>
@@ -371,7 +376,7 @@ export default function AdminOverview() {
                           p.total === 0 ? "text-red-400" : "text-ember"
                         )}
                       >
-                        {p.total} left
+                        {p.total === 0 ? "Sold out" : `Only ${p.total} left`}
                       </span>
                     </li>
                   ))}

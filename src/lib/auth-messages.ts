@@ -1,19 +1,25 @@
-/** Firebase auth error codes → human sentences. */
-export function authErrorMessage(err: unknown): string {
+import { translate, type Lang } from "./i18n";
+
+/**
+ * Firebase auth error codes → human sentences, in the storefront language.
+ * `lang` defaults to English so non-UI callers keep working unchanged.
+ */
+export function authErrorMessage(err: unknown, lang: Lang = "en"): string {
+  const t = (key: string) => translate(lang, key);
   const code =
     typeof err === "object" && err && "code" in err
       ? String((err as { code: unknown }).code)
       : "";
   if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found"))
-    return "Wrong email or password. Try again.";
-  if (code.includes("email-already-in-use")) return "That email already has an account — sign in instead.";
-  if (code.includes("weak-password")) return "Password needs at least 6 characters.";
-  if (code.includes("too-many-requests")) return "Too many attempts. Wait a minute and try again.";
-  if (code.includes("invalid-email")) return "That email doesn't look right.";
-  if (code.includes("network-request-failed")) return "Connection hiccup — check your internet and try again.";
+    return t("auth.errWrong");
+  if (code.includes("email-already-in-use")) return t("auth.errInUse");
+  if (code.includes("weak-password")) return t("auth.errWeak");
+  if (code.includes("too-many-requests")) return t("auth.errTooMany");
+  if (code.includes("invalid-email")) return t("auth.errEmail");
+  if (code.includes("network-request-failed")) return t("auth.errNetwork");
   if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request"))
-    return "Google sign-in was closed before finishing.";
-  if (code.includes("operation-not-allowed")) return "That sign-in method isn't enabled yet.";
+    return t("auth.errPopup");
+  if (code.includes("operation-not-allowed")) return t("auth.errMethod");
   const raw = err instanceof Error ? err.message.replace("Firebase: ", "") : "";
-  return raw || "Something went wrong — try again.";
+  return raw || t("auth.errGeneric");
 }

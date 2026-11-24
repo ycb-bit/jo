@@ -37,6 +37,15 @@ body {
   color: var(--color-bone);
 }
 
+/* Amharic mode: the latin-only display face has no Ethiopic glyphs, so the
+   Ethiopic font leads and falls back to Archivo for latin/numerals. */
+html[lang="am"] body,
+html[lang="am"] .font-display {
+  font-family: var(--font-ethiopic, "Noto Sans Ethiopic"), var(--font-body);
+  font-stretch: 100%;
+  letter-spacing: 0;
+}
+
 .font-display {
   font-family: var(--font-display);
   font-stretch: 125%;
@@ -67,6 +76,15 @@ body {
   70% { transform: translate(0%, 15%); }
   80% { transform: translate(3%, 35%); }
   90% { transform: translate(-10%, 10%); }
+}
+
+/* Admin desk: flat black, no grain overlay. The animated grain over a dark
+   surface flickers like a broken panel, which is what the studio looked like. */
+body.admin-mode {
+  background: #000;
+}
+body.admin-mode::after {
+  display: none;
 }
 
 /* Marquee */

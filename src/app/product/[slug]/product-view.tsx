@@ -14,6 +14,8 @@ import { track } from "@/lib/analytics";
 import { formatMoney, stockFor, totalStock, variantPrice, FREE_SHIPPING_THRESHOLD } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import { BackButton } from "@/components/back-button";
 
 export default function ProductView({ slug }: { slug: string }) {
   const [product, setProduct] = useState<Product | null | undefined>(undefined);
@@ -26,6 +28,7 @@ export default function ProductView({ slug }: { slug: string }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { toast } = useToast();
+  const { t } = useT();
 
   useEffect(() => watchProduct(slug, setProduct), [slug]);
   useEffect(() => watchProducts(setRelated, { sort: "new" }), []);
@@ -65,10 +68,10 @@ export default function ProductView({ slug }: { slug: string }) {
   if (product === null) {
     return (
       <div className="mx-auto max-w-[1440px] px-5 py-32 text-center md:px-10">
-        <h1 className="font-display text-5xl uppercase">Piece not found</h1>
-        <p className="mt-4 opacity-60">It may have sold out and been retired.</p>
+        <h1 className="font-display text-5xl uppercase">{t("product.notFound")}</h1>
+        <p className="mt-4 opacity-60">{t("product.notFoundBody")}</p>
         <Link href="/shop" className="u-link mt-8 inline-block text-[12px] uppercase tracking-[0.2em]">
-          ← Back to the rack
+          {t("product.backToRack")}
         </Link>
       </div>
     );
@@ -80,7 +83,7 @@ export default function ProductView({ slug }: { slug: string }) {
 
   const addToBag = () => {
     if (!variants.inStock) {
-      toast("That size just sold out — pick another", "err");
+      toast(t("toast.sizeSoldOut"), "err");
       return;
     }
     cart.add({
@@ -93,7 +96,7 @@ export default function ProductView({ slug }: { slug: string }) {
       unitPrice: variantPrice(product, color, size),
     });
     track("add_to_cart", { ref: product.id, name: product.name, value: variantPrice(product, color, size), qty: 1 });
-    toast(`${product.name} — ${color}/${size} added to your bag`);
+    toast(t("toast.addedToBag", { name: product.name, variant: `${color}/${size}` }));
     setBagged(`${product.name} — ${color}/${size}`);
     setTimeout(() => setBagged(null), 6000);
   };
@@ -102,8 +105,9 @@ export default function ProductView({ slug }: { slug: string }) {
 
   return (
     <div className="mx-auto max-w-[1440px] px-5 pb-24 pt-10 md:px-10">
+      <BackButton />
       <nav className="mb-8 text-[11px] uppercase tracking-[0.2em] opacity-50">
-        <Link href="/shop" className="u-link">Shop</Link> / {product.category}
+        <Link href="/shop" className="u-link">{t("nav.shop")}</Link> / {product.category}
       </nav>
 
       <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
@@ -144,7 +148,7 @@ export default function ProductView({ slug }: { slug: string }) {
             </AnimatePresence>
             {stock === 0 && (
               <span className="absolute left-4 top-4 bg-ink px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-bone">
-                Sold out
+                {t("product.soldOut")}
               </span>
             )}
           </div>
@@ -182,7 +186,7 @@ export default function ProductView({ slug }: { slug: string }) {
 
             {/* Color */}
             <div className="mt-8">
-              <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Colour — <span className="text-ink">{color}</span></p>
+              <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("product.colour")} — <span className="text-ink">{color}</span></p>
               <div className="mt-3 flex gap-2">
                 {product.colors.map((c) => (
                   <button
@@ -202,16 +206,18 @@ export default function ProductView({ slug }: { slug: string }) {
             {/* Size */}
             <div className="mt-6">
               <div className="flex items-baseline justify-between">
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">Size</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] opacity-60">{t("product.size")}</p>
                 <p className="text-[11px] uppercase tracking-[0.14em]">
                   {variants.inStock ? (
-                    variants.left <= 3 ? (
-                      <span className="text-ember">Only {variants.left} left in {size}</span>
+                    variants.left <= 5 ? (
+                      <span className="text-ember">
+                        {t("product.onlyLeft", { n: variants.left, size })}
+                      </span>
                     ) : (
-                      <span className="opacity-50">In stock</span>
+                      <span className="opacity-50">{t("product.inStock")}</span>
                     )
                   ) : (
-                    <span className="text-ember">Selected size sold out</span>
+                    <span className="text-ember">{t("product.sizeSoldOut")}</span>
                   )}
                 </p>
               </div>
@@ -244,25 +250,25 @@ export default function ProductView({ slug }: { slug: string }) {
                   disabled={stock === 0}
                   className="border border-ink bg-ink px-12 py-4 text-[12px] uppercase tracking-[0.22em] text-bone transition-colors duration-300 hover:border-ember hover:bg-ember disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {stock === 0 ? "Sold out" : "Add to bag"}
+                  {stock === 0 ? t("product.soldOut") : t("product.addToBag")}
                 </button>
               </Magnetic>
               {bagged && (
                 <div className="mt-4 border border-ink bg-bone-dim/60 p-4 text-[13px]">
                   <p>
                     <span className="mr-2" aria-hidden>✓</span>
-                    <strong>{bagged.split(" — ")[0]}</strong> is in your bag ({bagged.split(" — ")[1]}).
+                    <strong>{bagged.split(" — ")[0]}</strong> {t("product.bagged")} ({bagged.split(" — ")[1]}).
                   </p>
                   <div className="mt-2 flex gap-5 text-[11px] uppercase tracking-[0.16em]">
-                    <Link href="/cart" className="u-link text-ember">View bag →</Link>
-                    <Link href="/checkout" className="u-link">Checkout now →</Link>
+                    <Link href="/cart" className="u-link text-ember">{t("product.viewBag")}</Link>
+                    <Link href="/checkout" className="u-link">{t("product.checkoutNow")}</Link>
                   </div>
                 </div>
               )}
               <button
                 onClick={() => {
                   wishlist.toggle(product.id);
-                  toast(saved ? "Removed from saved" : "Saved for later");
+                  toast(t(saved ? "toast.unsaved" : "toast.saved"));
                 }}
                 className="flex items-center gap-2 border border-line px-5 text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-ink"
                 aria-label="Save"
@@ -270,25 +276,22 @@ export default function ProductView({ slug }: { slug: string }) {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill={saved ? "#C8501E" : "none"} stroke={saved ? "#C8501E" : "#141311"} strokeWidth="2">
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
-                {saved ? "Saved" : "Save"}
+                {saved ? t("product.saved") : t("product.save")}
               </button>
             </div>
 
-            <p className="mt-5 text-[12px] leading-relaxed opacity-55">
-              Paid by bank transfer through Jo&apos;s payment link. Every payment is checked by a
-              human before your piece ships — usually within hours.
-            </p>
+            <p className="mt-5 text-[12px] leading-relaxed opacity-55">{t("product.payNote")}</p>
 
             {/* Details accordion */}
             <div className="mt-10 border-t border-line">
               {[
-                ["Fabric", product.fabric],
-                ["Care", product.care],
-                ["Shipping", `Worldwide flat-rate. Free over ${formatMoney(FREE_SHIPPING_THRESHOLD)}. Dispatched within 2 working days of payment verification.`],
-              ].map(([t, d]) => (
-                <details key={t} className="group border-b border-line">
+                [t("product.fabric"), product.fabric],
+                [t("product.care"), product.care],
+                [t("product.shipping"), t("product.shippingBody", { amount: formatMoney(FREE_SHIPPING_THRESHOLD) })],
+              ].map(([title, d]) => (
+                <details key={title} className="group border-b border-line">
                   <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-[12px] uppercase tracking-[0.2em]">
-                    {t}
+                    {title}
                     <span className="transition-transform duration-300 group-open:rotate-45">+</span>
                   </summary>
                   <p className="pb-5 text-[14px] leading-relaxed opacity-70">{d}</p>
@@ -303,7 +306,7 @@ export default function ProductView({ slug }: { slug: string }) {
       {relatedOthers.length > 0 && (
         <section className="mt-28">
           <Reveal>
-            <h2 className="font-display text-3xl uppercase md:text-5xl">Wears well with</h2>
+            <h2 className="font-display text-3xl uppercase md:text-5xl">{t("product.wearsWellWith")}</h2>
           </Reveal>
           <div className="mt-8 grid grid-cols-2 gap-5 md:grid-cols-4 md:gap-7">
             {relatedOthers.map((p, i) => (

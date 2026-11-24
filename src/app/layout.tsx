@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo } from "next/font/google";
+import { Archivo, Noto_Sans_Ethiopic } from "next/font/google";
 import "./globals.css";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { Nav } from "@/components/nav";
@@ -8,8 +8,15 @@ import { SmoothScroll } from "@/components/smooth-scroll";
 import { Toaster } from "@/components/toaster";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { AuthProvider } from "@/lib/auth-context";
+import { LanguageProvider } from "@/lib/i18n";
 
 const archivo = Archivo({ subsets: ["latin"], variable: "--font-archivo" });
+// Amharic needs Ethiopic glyphs — Archivo only carries latin.
+const ethiopic = Noto_Sans_Ethiopic({
+  subsets: ["ethiopic"],
+  weight: ["400", "500", "700"],
+  variable: "--font-ethiopic",
+});
 
 /**
  * Canonical site origin. Set NEXT_PUBLIC_SITE_URL in the environment
@@ -67,18 +74,20 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={archivo.variable} suppressHydrationWarning>
+    <html lang="en" className={`${archivo.variable} ${ethiopic.variable}`} suppressHydrationWarning>
       <body className="grain min-h-screen antialiased" suppressHydrationWarning>
-        <AuthProvider>
-          <AnalyticsTracker />
-          <SmoothScroll>
-            <AnnouncementBar />
-            <Nav />
-            <main>{children}</main>
-            <Footer />
-          </SmoothScroll>
-          <Toaster />
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AnalyticsTracker />
+            <SmoothScroll>
+              <AnnouncementBar />
+              <Nav />
+              <main>{children}</main>
+              <Footer />
+            </SmoothScroll>
+            <Toaster />
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

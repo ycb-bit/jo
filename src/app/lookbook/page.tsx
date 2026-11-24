@@ -6,9 +6,12 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { LookImage } from "@/components/look-image";
 import { Reveal } from "@/components/reveal";
+import { BackButton } from "@/components/back-button";
+import { useT } from "@/lib/i18n";
 import type { Look } from "@/lib/types";
 
 export default function LookbookPage() {
+  const { t } = useT();
   const [looks, setLooks] = useState<Look[]>([]);
   const [zoom, setZoom] = useState<Look | null>(null);
 
@@ -19,22 +22,22 @@ export default function LookbookPage() {
 
   return (
     <div className="mx-auto max-w-[1440px] px-5 pb-24 pt-16 md:px-10">
+      <BackButton />
       <Reveal>
-        <p className="text-[11px] uppercase tracking-[0.34em] opacity-60">The album</p>
+        <p className="text-[11px] uppercase tracking-[0.34em] opacity-60">{t("look.kicker")}</p>
         <h1 className="font-display mt-4 text-5xl uppercase leading-[0.9] md:text-7xl">
-          Lookbook<span className="text-ember">.</span>
+          {t("look.title")}<span className="text-ember">.</span>
         </h1>
         <p className="mt-5 max-w-lg text-[15px] leading-relaxed opacity-70">
-          Frames from the bench, the cutting table and the street. Jo adds to the album as
-          the work happens — nothing staged, nothing retouched.
+          {t("look.intro")}
         </p>
       </Reveal>
 
       {looks.length === 0 ? (
         <div className="mt-20 border border-dashed border-line p-16 text-center">
-          <p className="font-display text-2xl uppercase opacity-60">The album is empty</p>
+          <p className="font-display text-2xl uppercase opacity-60">{t("look.emptyTitle")}</p>
           <p className="mt-3 text-[13px] opacity-50">
-            Jo hasn&apos;t added any frames yet. Check back after the next drop.
+            {t("look.emptyBody")}
           </p>
         </div>
       ) : (
@@ -51,7 +54,7 @@ export default function LookbookPage() {
             >
               <LookImage
                 path={l.imagePath}
-                alt={l.title || "Lookbook frame"}
+                alt={l.title || t("look.frame")}
                 className="aspect-auto min-h-40 w-full"
               />
               {l.title && (
@@ -76,18 +79,18 @@ export default function LookbookPage() {
             className="max-h-full w-full max-w-4xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <LookImage path={zoom.imagePath} alt={zoom.title || "Lookbook frame"} className="max-h-[80svh] w-full" />
+            <LookImage path={zoom.imagePath} alt={zoom.title || t("look.frame")} className="max-h-[80svh] w-full" />
             <div className="mt-4 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-bone/70">
-              <span>{zoom.title || "Untitled frame"}</span>
-              <button className="u-link" onClick={() => setZoom(null)}>Close</button>
+              <span>{zoom.title || t("look.untitled")}</span>
+              <button className="u-link" onClick={() => setZoom(null)}>{t("look.close")}</button>
             </div>
           </motion.div>
           <button
-            aria-label="Close"
+            aria-label={t("look.close")}
             className="absolute right-6 top-6 text-[12px] uppercase tracking-[0.2em] text-bone/60 hover:text-bone"
             onClick={() => setZoom(null)}
           >
-            Close ✕
+            {t("look.close")} ✕
           </button>
         </div>
       )}

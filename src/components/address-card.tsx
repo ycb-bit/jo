@@ -3,6 +3,7 @@
 import { addressLines, addressTitle } from "@/lib/addresses";
 import type { Address } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 /**
  * One saved-address card. Used by the account address book (with Edit / Remove
@@ -21,13 +22,14 @@ export function AddressCard({
   actions?: React.ReactNode;
   className?: string;
 }) {
+  const { t } = useT();
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <p className="font-medium">{addressTitle(address)}</p>
+        <p className="font-medium">{addressTitle(address) || t("address.empty")}</p>
         {address.isDefault && (
           <span className="shrink-0 border border-ember px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-ember">
-            Default
+            {t("address.defaultBadge")}
           </span>
         )}
       </div>
@@ -35,7 +37,7 @@ export function AddressCard({
         {addressLines(address).map((line) => (
           <p key={line}>{line}</p>
         ))}
-        <p>{address.country || "Ethiopia"}</p>
+        {address.country && <p>{address.country}</p>}
         <p className="tabular-nums">{address.phone}</p>
       </div>
     </>
@@ -54,7 +56,7 @@ export function AddressCard({
         <button type="button" onClick={onSelect} className="w-full text-left" aria-pressed={selected}>
           {body}
           <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-ember">
-            {selected ? "Shipping here ✓" : "Ship here"}
+            {selected ? t("address.shippingHere") : t("address.shipHere")}
           </span>
         </button>
       ) : (

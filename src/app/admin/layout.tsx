@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { BackButton } from "@/components/back-button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -24,13 +25,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!loading && fbUser && !isAdmin) router.replace("/account");
   }, [loading, fbUser, isAdmin, router]);
 
+  // The storefront's animated film grain reads as flickering static on a dark
+  // surface — the studio runs flat black instead.
+  useEffect(() => {
+    document.body.classList.add("admin-mode");
+    return () => document.body.classList.remove("admin-mode");
+  }, []);
+
   if (loading || !profile) {
-    return <div className="min-h-screen bg-ink p-10"><div className="skeleton h-40 max-w-md" /></div>;
+    return <div className="min-h-screen bg-black p-10"><div className="skeleton h-40 max-w-md" /></div>;
   }
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-ink text-bone">
+    <div className="min-h-screen bg-black text-bone">
       <div className="mx-auto flex max-w-[1500px] flex-col md:flex-row">
         <aside className="shrink-0 border-b border-bone/10 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
           <div className="flex items-center justify-between p-6 md:block">
@@ -59,7 +67,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </Link>
           </nav>
         </aside>
-        <main className="min-w-0 flex-1 p-5 md:p-10">{children}</main>
+        <main className="min-w-0 flex-1 p-5 md:p-10">
+          <BackButton className="opacity-45 hover:opacity-100" />
+          {children}
+        </main>
       </div>
     </div>
   );

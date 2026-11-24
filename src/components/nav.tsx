@@ -8,13 +8,13 @@ import { useCart, useWishlist } from "@/lib/store";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
+/** Categories live in the shop filter and the footer — not in the main menu. */
 const LINKS = [
-  { href: "/shop", label: "Shop" },
-  { href: "/shop?category=outerwear", label: "Outerwear" },
-  { href: "/shop?category=knitwear", label: "Knitwear" },
-  { href: "/lookbook", label: "Lookbook" },
-  { href: "/about", label: "The Studio" },
+  { href: "/shop", key: "nav.shop" },
+  { href: "/lookbook", key: "nav.lookbook" },
+  { href: "/about", key: "nav.studio" },
 ];
 
 export function Nav() {
@@ -25,6 +25,7 @@ export function Nav() {
   const cartCount = useCart((s) => s.lines.reduce((a, l) => a + l.qty, 0));
   const wishCount = useWishlist((s) => s.productIds.length);
   const isAdminRoute = pathname.startsWith("/admin");
+  const { t, lang, setLang } = useT();
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
   useEffect(() => {
@@ -47,17 +48,17 @@ export function Nav() {
       >
         <div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 md:px-10">
           <button
-            aria-label="Menu"
+            aria-label={open ? t("nav.close") : t("nav.menu")}
             className="u-link text-[12px] uppercase tracking-[0.2em] md:hidden"
             onClick={() => setOpen(!open)}
           >
-            {open ? "Close" : "Menu"}
+            {open ? t("nav.close") : t("nav.menu")}
           </button>
 
           <nav className="hidden items-center gap-7 md:flex">
             {LINKS.map((l) => (
-              <Link key={l.label} href={l.href} className="u-link text-[12px] uppercase tracking-[0.18em]">
-                {l.label}
+              <Link key={l.key} href={l.href} className="u-link text-[12px] uppercase tracking-[0.18em]">
+                {t(l.key)}
               </Link>
             ))}
           </nav>
@@ -66,22 +67,36 @@ export function Nav() {
             JO<span className="text-ember">.</span>
           </Link>
 
-          <div className="flex items-center gap-5 text-[12px] uppercase tracking-[0.18em]">
-            <Link href="/wishlist" className="u-link hidden sm:inline" aria-label="Wishlist">
-              Saved{wishCount > 0 && <sup className="ml-0.5 text-ember">{wishCount}</sup>}
+          <div className="flex items-center gap-4 text-[12px] uppercase tracking-[0.18em] sm:gap-5">
+            <button
+              onClick={() => setLang(lang === "am" ? "en" : "am")}
+              aria-label={t("lang.switchTo")}
+              title={t("lang.switchTo")}
+              className="border border-line px-2 py-1 text-[11px] tracking-[0.12em] transition-colors hover:border-ink"
+            >
+              {t("lang.toggle")}
+            </button>
+            <Link href="/wishlist" className="u-link hidden sm:inline" aria-label={t("nav.saved")}>
+              {t("nav.saved")}
+              {wishCount > 0 && <sup className="ml-0.5 text-ember">{wishCount}</sup>}
             </Link>
             {user ? (
               <div className="hidden items-center gap-4 sm:flex">
-                <Link href="/account" className="u-link">Account</Link>
+                <Link href="/account" className="u-link">
+                  {t("nav.account")}
+                </Link>
                 <button className="u-link opacity-60 hover:opacity-100" onClick={() => signOut(auth)}>
-                  Out
+                  {t("nav.signOut")}
                 </button>
               </div>
             ) : (
-              <Link href="/login" className="u-link hidden sm:inline">Sign in</Link>
+              <Link href="/login" className="u-link hidden sm:inline">
+                {t("nav.signIn")}
+              </Link>
             )}
             <Link href="/cart" className="u-link">
-              Bag{cartCount > 0 && <sup className="ml-0.5 text-ember">{cartCount}</sup>}
+              {t("nav.bag")}
+              {cartCount > 0 && <sup className="ml-0.5 text-ember">{cartCount}</sup>}
             </Link>
           </div>
         </div>
@@ -98,13 +113,18 @@ export function Nav() {
           >
             <nav className="flex flex-col gap-5">
               {LINKS.map((l) => (
-                <Link key={l.label} href={l.href} className="font-display text-2xl uppercase">
-                  {l.label}
+                <Link key={l.key} href={l.href} className="font-display text-2xl uppercase">
+                  {t(l.key)}
                 </Link>
               ))}
-              <div className="mt-2 flex gap-6 text-[12px] uppercase tracking-[0.18em] opacity-70">
-                <Link href="/wishlist">Saved</Link>
-                <Link href={user ? "/account" : "/login"}>{user ? "Account" : "Sign in"}</Link>
+              <div className="mt-2 flex flex-wrap items-center gap-6 text-[12px] uppercase tracking-[0.18em] opacity-70">
+                <Link href="/wishlist">{t("nav.saved")}</Link>
+                <Link href={user ? "/account" : "/login"}>
+                  {user ? t("nav.account") : t("nav.signIn")}
+                </Link>
+                <button onClick={() => setLang(lang === "am" ? "en" : "am")} className="underline">
+                  {t("lang.toggle")}
+                </button>
               </div>
             </nav>
           </motion.div>

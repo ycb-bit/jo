@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { auth, db, storage } from "@/lib/firebase";
 import { useToast } from "@/lib/store";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { arrayUnion, collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { compressImageToDataUri } from "@/lib/image-compress";
 import { formatMoney, totalStock, cn, slugify } from "@/lib/utils";
 import { CURRENCY } from "@/lib/theme";
@@ -31,7 +31,7 @@ type Draft = {
 
 const EMPTY_DRAFT: Draft = {
   name: "", description: "", fabric: "", care: "", price: "", priceOverrides: {},
-  category: "outerwear", colors: "Bone, Ink", sizes: ["S", "M", "L", "XL"],
+  category: "", colors: "Bone, Ink", sizes: ["S", "M", "L", "XL"],
   stock: {}, published: true,
 };
 
@@ -44,12 +44,15 @@ export default function AdminProducts() {
   const [existing, setExisting] = useState<string[]>([]); // images already on the product
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [newCatMode, setNewCatMode] = useState(false); // typing a category that isn't listed yet
 
   // Firestore hard-limits a document to 1 MiB. Images live inside the product
   // doc, so the set has to fit under that with room for the product fields.
   const FIRESTORE_DOC_LIMIT = 1_000_000;
   const IMAGE_BUDGET = 700_000;
-  const bytesOf = (uri: string) => Math.ceil((uri.length * 3) / 4);
+  // Base64 is plain ASCII, so the string length is what Firestore charges
+  // against its 1 MiB document limit — measure characters, not decoded bytes.
+  const bytesOf = (uri: string) => uri.length;
   const imageBytes = useMemo(
     () => [...existing, ...images].reduce((n, u) => n + bytesOf(u), 0),
     [existing, images]
@@ -74,23 +77,43 @@ export default function AdminProducts() {
     );
   }, []);
 
+  // The editor is an overlay: Escape closes it and the page behind it stops
+  // scrolling, so a long form never drags the product list around.
+  const editing = !!draft;
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDraft(null);
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [editing]);
+
   const pickImages = async (files: File[]) => {
     const uris: string[] = [];
     // Budget-aware: Firestore docs cap at 1 MiB, so squeeze harder
     // (then smaller) until the whole set fits.
-    const budget = 700_000;
-    let used = images.reduce((n, x) => n + x.length, 0);
+    const budget = IMAGE_BUDGET;
+    let used = [...existing, ...images].reduce((n, x) => n + bytesOf(x), 0);
     for (const f of files) {
       try {
         let u = await compressImageToDataUri(f);
-        if (used + u.length > budget) {
+        if (used + bytesOf(u) > budget) {
+          u = await compressImageToDataUri(f, 900, 0.6);
+        }
+        if (used + bytesOf(u) > budget) {
           u = await compressImageToDataUri(f, 720, 0.5);
         }
-        if (used + u.length > budget) {
+        if (used + bytesOf(u) > budget) {
           toast("Too many photos for one product — kept the ones that fit", "err");
           break;
         }
-        used += u.length;
+        used += bytesOf(u);
         uris.push(u);
       } catch {
         toast("Couldn't read one of the images", "err");
@@ -100,13 +123,17 @@ export default function AdminProducts() {
   };
 
   const startNew = () => {
-    setDraft({ ...EMPTY_DRAFT, stock: {} });
+    // Start from a category the store actually uses — the old hardcoded
+    // default could save a piece into a category the shop never lists.
+    setDraft({ ...EMPTY_DRAFT, category: categories[0] || "", stock: {} });
     setImages([]);
     setExisting([]);
+    setNewCatMode(false);
   };
   const startEdit = (p: Product) => {
     setImages([]);
     setExisting(p.images || []);
+    setNewCatMode(false);
     setDraft({
       id: p.id, name: p.name, description: p.description, fabric: p.fabric, care: p.care,
       price: String(p.price),
@@ -176,6 +203,10 @@ export default function AdminProducts() {
       toast("Name and price are required", "err");
       return;
     }
+    if (!draft.category.trim()) {
+      toast("Pick a category for this piece", "err");
+      return;
+    }
     setBusy(true);
     try {
       const colors = draft.colors.split(",").map((c) => c.trim()).filter(Boolean);
@@ -206,13 +237,12 @@ export default function AdminProducts() {
         price: parseFloat(draft.price) || 0,
         ...(Object.keys(priceOverrides).length ? { priceOverrides } : {}),
         currency: CURRENCY,
-        category: draft.category,
+        category: draft.category.trim(),
         colors,
         sizes: draft.sizes,
         stock,
         published: draft.published,
       }));
-      images.forEach((uri) => form.append("images", uri));
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
@@ -220,6 +250,16 @@ export default function AdminProducts() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Save failed");
+      // A category typed in the editor becomes a first-class shop category, so
+      // it is still there (and shiftable) on the next product.
+      const savedCategory = draft.category.trim();
+      if (savedCategory && !categories.some((c) => c.toLowerCase() === savedCategory.toLowerCase())) {
+        await setDoc(
+          doc(db, "settings", "store"),
+          { categories: arrayUnion(savedCategory) },
+          { merge: true }
+        ).catch(() => {});
+      }
       const live = draft.published;
       toast(
         draft.id
@@ -247,6 +287,21 @@ export default function AdminProducts() {
     [draft?.colors]
   );
 
+  /** Live total for the whole grid, so a low or empty piece is obvious while editing. */
+  const draftTotal = useMemo(
+    () => Object.values(draft?.stock || {}).reduce((n, v) => n + (parseInt(v, 10) || 0), 0),
+    [draft?.stock]
+  );
+
+  // Listed categories, plus the piece's own value so editing an older product
+  // never shows a blank dropdown.
+  const categoryOptions = useMemo(() => {
+    const list = [...categories];
+    const current = draft?.category.trim();
+    if (current && !list.includes(current)) list.push(current);
+    return list;
+  }, [categories, draft?.category]);
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -263,25 +318,74 @@ export default function AdminProducts() {
       </div>
 
       <ul className="mt-8 divide-y divide-bone/10 border-y border-bone/10">
-        {products.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-            <div className="min-w-0">
-              <p className="text-[14px] font-medium">
-                {p.name}
-              </p>
-              <p className="text-[11px] opacity-50">
-                {p.category} · {formatMoney(p.price, p.currency)} · {totalStock(p.stock || {})} in stock · /{p.slug}
+        {products.map((p) => {
+          const stock = totalStock(p.stock || {});
+          return (
+          <li
+            key={p.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Edit ${p.name}`}
+            onClick={() => startEdit(p)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                startEdit(p);
+              }
+            }}
+            className="-mx-2 cursor-pointer px-2 py-4 transition-colors hover:bg-bone/[0.04] focus-visible:bg-bone/[0.04] focus-visible:outline-none"
+          >
+            {/* Name on the left, price pinned right, actions on their own row.
+                The whole row opens the editor — pressing a piece is the obvious
+                gesture, and its buttons still work underneath. */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[14px] font-medium">{p.name}</p>
+                <p className="text-[11px] opacity-50">
+                  {p.category || "no category"} ·{" "}
+                  {/* Always name the count — "low stock" alone doesn't say how low. */}
+                  <span className={cn(stock === 0 ? "text-red-400" : stock <= 5 ? "text-ember" : "")}>
+                    {stock === 0 ? "sold out" : stock <= 5 ? `only ${stock} left` : `${stock} in stock`}
+                  </span>{" "}
+                  · /{p.slug}
+                </p>
+              </div>
+              <p className="shrink-0 whitespace-nowrap text-right text-[14px] tabular-nums">
+                {formatMoney(p.price, p.currency)}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-4 text-[11px] uppercase tracking-[0.14em]">
-              <button onClick={() => togglePublish(p)} className={cn("u-link", p.published ? "text-ember" : "opacity-50")}>
+            <div className="mt-2.5 flex flex-wrap items-center gap-4 text-[11px] uppercase tracking-[0.14em]">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // the row below opens the editor
+                  void togglePublish(p);
+                }}
+                className={cn("u-link", p.published ? "text-ember" : "opacity-50")}
+              >
                 {p.published ? "Live" : "Draft — not in the shop"}
               </button>
-              <button onClick={() => startEdit(p)} className="u-link opacity-70 hover:opacity-100">Edit</button>
-              <button onClick={() => setPendingDelete(p)} className="u-link opacity-40 hover:opacity-90 hover:text-red-400">Delete</button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEdit(p);
+                }}
+                className="u-link opacity-70 hover:opacity-100"
+              >
+                Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingDelete(p);
+                }}
+                className="u-link opacity-40 hover:opacity-90 hover:text-red-400"
+              >
+                Delete
+              </button>
             </div>
           </li>
-        ))}
+          );
+        })}
         {products.length === 0 && (
           <li className="py-14 text-center text-[13px] opacity-50">
             No products yet — hit “New product” or run the seed script.
@@ -289,13 +393,33 @@ export default function AdminProducts() {
         )}
       </ul>
 
-      {/* Editor drawer */}
+      {/* Editor — an overlay on top of the list, not a panel beside it */}
       {draft && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-ink/70 backdrop-blur-sm" onClick={() => setDraft(null)}>
-          <div className="h-full w-full max-w-xl overflow-y-auto border-l border-bone/15 bg-ink p-7" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl uppercase">{draft.id ? "Edit product" : "New product"}</h2>
-              <button onClick={() => setDraft(null)} className="text-[11px] uppercase tracking-[0.14em] opacity-50 hover:opacity-100">Close</button>
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/80 p-4 backdrop-blur-sm md:p-8"
+          onClick={() => setDraft(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={draft.id ? "Edit product" : "New product"}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto border border-bone/20 bg-ink p-6 shadow-2xl md:p-7"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-bone/15 pb-4">
+              <div>
+                <h2 className="font-display text-2xl uppercase">{draft.id ? "Edit product" : "New product"}</h2>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.14em] opacity-45">
+                  {draft.id ? draft.name || "Untitled piece" : "Not in the shop until saved"}
+                </p>
+              </div>
+              <button
+                onClick={() => setDraft(null)}
+                className="shrink-0 text-[11px] uppercase tracking-[0.14em] opacity-50 hover:opacity-100"
+                aria-label="Close editor"
+              >
+                Close
+              </button>
             </div>
 
             <div className="mt-6 space-y-4 text-[13px]">
@@ -312,12 +436,53 @@ export default function AdminProducts() {
                   <span className="opacity-60">Price (ETB) *</span>
                   <input type="number" step="1" className="mt-1 w-full border-b border-bone/25 bg-transparent py-2 outline-none focus:border-bone" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
                 </label>
-                <label className="block">
-                  <span className="opacity-60">Category</span>
-                  <select className="mt-1 w-full border-b border-bone/25 bg-transparent py-2 outline-none focus:border-bone" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
-                    {categories.map((c) => <option key={c} value={c} className="bg-ink">{c}</option>)}
-                  </select>
-                </label>
+                <div className="block">
+                  <span className="opacity-60">Category *</span>
+                  {newCatMode ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        autoFocus
+                        className="w-full border-b border-bone/25 bg-transparent py-2 outline-none placeholder:text-bone/30 focus:border-bone"
+                        placeholder="e.g. shirting"
+                        value={draft.category}
+                        onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setNewCatMode(false);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewCatMode(false)}
+                        className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-50 hover:opacity-100"
+                      >
+                        List
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      className="mt-1 w-full border-b border-bone/25 bg-transparent py-2 outline-none focus:border-bone"
+                      value={draft.category}
+                      onChange={(e) => {
+                        if (e.target.value === "__new__") {
+                          setNewCatMode(true);
+                          setDraft({ ...draft, category: "" });
+                        } else {
+                          setDraft({ ...draft, category: e.target.value });
+                        }
+                      }}
+                    >
+                      {!draft.category && <option value="" className="bg-ink">Pick a category…</option>}
+                      {categoryOptions.map((c) => <option key={c} value={c} className="bg-ink">{c}</option>)}
+                      <option value="__new__" className="bg-ink">＋ New category…</option>
+                    </select>
+                  )}
+                  <span className="mt-1 block text-[11px] opacity-40">
+                    A new one you type here shows up in the shop filter too.
+                  </span>
+                </div>
               </div>
               <label className="block">
                 <span className="opacity-60">Fabric</span>
@@ -348,7 +513,21 @@ export default function AdminProducts() {
 
               {/* Stock grid */}
               <div>
-                <span className="opacity-60">Stock per colour / size</span>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="opacity-60">Stock per colour / size</span>
+                  <span
+                    className={cn(
+                      "text-[11px] tabular-nums",
+                      draftTotal === 0 ? "text-red-400" : draftTotal <= 5 ? "text-ember" : "opacity-50"
+                    )}
+                  >
+                    {draftTotal === 0
+                      ? "nothing in stock yet"
+                      : draftTotal <= 5
+                        ? `only ${draftTotal} left in total`
+                        : `${draftTotal} in stock`}
+                  </span>
+                </div>
                 <div className="mt-2 overflow-x-auto">
                   <table className="w-full text-center text-[12px]">
                     <thead>
