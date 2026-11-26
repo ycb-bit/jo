@@ -15,6 +15,7 @@ export function ConfirmDialog({
   intro,
   confirmWord,
   confirmLabel = "Delete permanently",
+  cancelLabel = "Keep it",
   onConfirm,
   onCancel,
   busy = false,
@@ -26,6 +27,8 @@ export function ConfirmDialog({
   /** Type this exactly to arm the destructive button. */
   confirmWord?: string;
   confirmLabel?: string;
+  /** Label for the safe button — translated on the storefront. */
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
@@ -43,7 +46,7 @@ export function ConfirmDialog({
   const ready = !confirmWord || typed.trim() === confirmWord.trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-5 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/80 p-5 backdrop-blur-sm">
       <div className="w-full max-w-md border border-bone/20 bg-ink p-7 text-bone">
         <h2 className="font-display text-2xl uppercase">{title}</h2>
         <div className="mt-3 text-[13px] leading-relaxed opacity-75">{intro}</div>
@@ -71,7 +74,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             className="flex-1 border border-bone/30 px-4 py-3 text-[11px] uppercase tracking-[0.2em] opacity-70 hover:opacity-100"
           >
-            Keep it
+            {cancelLabel}
           </button>
           <button
             onClick={onConfirm}

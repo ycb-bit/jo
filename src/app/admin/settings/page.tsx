@@ -295,6 +295,30 @@ export default function AdminSettings() {
       <div className="mt-10 space-y-5 text-[13px]">
         <h2 className="font-display text-xl uppercase">General</h2>
         <label className="block">
+          <span className="opacity-60">Store currency</span>
+          <input
+            className="mt-1 w-full border-b border-bone/25 bg-transparent py-2.5 uppercase outline-none focus:border-bone"
+            value={settings.currency}
+            onChange={(e) =>
+              setSettings({ ...settings, currency: e.target.value.toUpperCase().slice(0, 8) })
+            }
+            placeholder="ETB"
+          />
+          <span className="mt-1 block text-[11px] opacity-40">
+            Printed on every order and on the dashboard. Catalogue prices are stored in ETB — keep
+            this as ETB so orders are never read as dollars.
+          </span>
+          {settings.currency.trim().toUpperCase() !== "ETB" && (
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, currency: "ETB" })}
+              className="mt-2 text-[11px] uppercase tracking-[0.16em] text-ember hover:opacity-80"
+            >
+              Set to ETB
+            </button>
+          )}
+        </label>
+        <label className="block">
           <span className="opacity-60">Handling / packaging fee per order</span>
           <input
             className="mt-1 w-full border-b border-bone/25 bg-transparent py-2.5 outline-none focus:border-bone"

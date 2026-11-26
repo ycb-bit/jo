@@ -15,6 +15,7 @@ import {
 import { AddressCard } from "@/components/address-card";
 import { AddressFields } from "@/components/address-fields";
 import { BackButton } from "@/components/back-button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useT } from "@/lib/i18n";
@@ -32,6 +33,8 @@ export default function AccountPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [makeDefault, setMakeDefault] = useState(false);
   const [savingAddr, setSavingAddr] = useState(false);
+  /** The address waiting for a yes before it leaves the book. */
+  const [addrToRemove, setAddrToRemove] = useState<Address | null>(null);
 
   useEffect(() => {
     if (!loading && !fbUser) router.replace("/login?next=/account");
@@ -232,7 +235,7 @@ export default function AccountPage() {
                             </button>
                           )}
                           <button onClick={() => startEdit(a)} className="u-link">{t("account.edit")}</button>
-                          <button onClick={() => removeAddress(a.id!)} className="u-link text-red-700">
+                          <button onClick={() => setAddrToRemove(a)} className="u-link text-red-700">
                             {t("account.remove")}
                           </button>
                         </>
@@ -286,6 +289,21 @@ export default function AccountPage() {
           </div>
         </div>
       )}
+
+      {/* Deleting an address is one tap away and cannot be undone — ask first. */}
+      <ConfirmDialog
+        open={addrToRemove !== null}
+        title={t("account.removeAddressTitle")}
+        intro={t("account.removeAddressBody")}
+        confirmLabel={t("account.removeAddress")}
+        cancelLabel={t("account.keep")}
+        onCancel={() => setAddrToRemove(null)}
+        onConfirm={() => {
+          const id = addrToRemove?.id;
+          setAddrToRemove(null);
+          if (id) void removeAddress(id);
+        }}
+      />
     </div>
   );
 }

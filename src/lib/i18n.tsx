@@ -354,6 +354,13 @@ export const DICT: Record<string, { en: string; am: string }> = {
   "account.saveChanges": { en: "Save changes", am: "ለውጦችን አስቀምጥ" },
   "account.saveAddress": { en: "Save address", am: "አድራሻ አስቀምጥ" },
   "account.cancel": { en: "Cancel", am: "ሰርዝ" },
+  "account.keep": { en: "Keep it", am: "አቆይ" },
+  "account.removeAddressTitle": { en: "Remove this address?", am: "ይህ አድራሻ ይወገድ?" },
+  "account.removeAddressBody": {
+    en: "It disappears from your address book. Orders already placed keep the address they were sent to.",
+    am: "ከአድራሻ ደብተርዎ ይወገዳል። አስቀድመው የተላኩ ትዕዛዞች የተላኩበትን አድራሻ ይይዛሉ።",
+  },
+  "account.removeAddress": { en: "Remove address", am: "አድራሻ አስወግድ" },
   "account.more": { en: "+{n} more", am: "+{n} ተጨማሪ" },
 
   // ---------- toasts ----------

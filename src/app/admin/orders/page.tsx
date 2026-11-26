@@ -39,6 +39,23 @@ export default function AdminOrders() {
     );
   }, []);
 
+  // The receipt opens over the queue, the same way the product editor opens
+  // over the product list: Escape closes it and the page behind stops scrolling.
+  const receiptOpen = !!selected;
+  useEffect(() => {
+    if (!receiptOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [receiptOpen]);
+
   const select = (o: Order) => {
     setSelected(o);
     setNote("");
@@ -129,8 +146,7 @@ export default function AdminOrders() {
         })}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
-        <ul className="divide-y divide-bone/10 border-y border-bone/10">
+      <ul className="mt-8 divide-y divide-bone/10 border-y border-bone/10">
           {visible.map((o) => (
             <li key={o.id}>
               <button onClick={() => select(o)} className={cn(
@@ -156,16 +172,22 @@ export default function AdminOrders() {
           {visible.length === 0 && (
             <li className="py-14 text-center text-[13px] opacity-50">Nothing in this queue.</li>
           )}
-        </ul>
+      </ul>
 
-        {/* Detail panel */}
-        <aside className="lg:sticky lg:top-8 lg:self-start">
-          {!selected ? (
-            <div className="border border-bone/15 p-10 text-center text-[13px] opacity-50">
-              Pick an order to review its receipt.
-            </div>
-          ) : (
-            <div className="border border-bone/15">
+      {/* Receipt overlay — clicking a row shows the receipt itself on top of
+          the queue instead of in a panel that pushes the list aside. */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-ink/80 p-4 backdrop-blur-sm md:p-8"
+          onClick={() => setSelected(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Receipt for ${selected.ref || selected.id.slice(0, 10)}`}
+        >
+          <div
+            className="w-full max-w-2xl border border-bone/20 bg-ink shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
               <div className="flex items-center justify-between border-b border-bone/15 p-5">
                 <div>
                   <p className="font-display text-xl uppercase">{selected.ref || selected.id.slice(0, 10)}</p>
@@ -197,6 +219,32 @@ export default function AdminOrders() {
                     before you verify.
                   </p>
                 )}
+
+                {/* The receipt sits at the top of the overlay, right under the
+                    amount it is being checked against. */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="opacity-60">Receipt</p>
+                    {receiptPreview && (
+                      <a
+                        href={receiptPreview}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] uppercase tracking-[0.16em] text-ember hover:opacity-70"
+                      >
+                        Open full size
+                      </a>
+                    )}
+                  </div>
+                  {receiptPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={receiptPreview} alt="Bank receipt" className="max-h-[60vh] w-full border border-bone/15 object-contain bg-bone" />
+                  ) : (
+                    <p className="border border-dashed border-bone/20 p-6 text-center opacity-50">
+                      {selected.receiptUrl ? "Receipt file exists but couldn't be loaded." : "No receipt uploaded yet."}
+                    </p>
+                  )}
+                </div>
                 {selected.rejectionReason && (
                   <div className="flex justify-between gap-4">
                     <span className="shrink-0 opacity-60">Rejected because</span>
@@ -265,17 +313,6 @@ export default function AdminOrders() {
                     This order has no shipping address on file — check with the customer before packing.
                   </p>
                 )}
-                <div>
-                  <p className="mb-2 opacity-60">Receipt</p>
-                  {receiptPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={receiptPreview} alt="Bank receipt" className="max-h-[420px] w-full border border-bone/15 object-contain bg-bone" />
-                  ) : (
-                    <p className="border border-dashed border-bone/20 p-6 text-center opacity-50">
-                      {selected.receiptUrl ? "Receipt file exists but couldn't be loaded." : "No receipt uploaded yet."}
-                    </p>
-                  )}
-                </div>
                 <div>
                   <p className="mb-2 opacity-60">Items</p>
                   <ul className="space-y-1.5">
@@ -376,10 +413,9 @@ export default function AdminOrders() {
                   }}
                 />
               </div>
-            </div>
-          )}
-        </aside>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
